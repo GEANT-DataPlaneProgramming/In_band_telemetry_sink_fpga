@@ -22,7 +22,7 @@ LIBS=-lm -lnfb -lp4dev -lInfluxDB
 
 p4int: $(INT_FILES)
 	@echo "Using CXXFLAGS = $(CXXFLAGS)"
-	$(CXX) -o $(BIN) $(CXXFLAGS) $(LIBS) $(INT_FILES)
+	$(CXX) -o $(BIN) $(CXXFLAGS) $(INT_FILES) $(LIBS)
 
 clean:
 	rm -f *.a *.o $(BIN)
