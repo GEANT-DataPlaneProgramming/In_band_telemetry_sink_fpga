@@ -1,5 +1,5 @@
 ## NFB Drivers ##
-git clone -b master git@gitlab.liberouter.org:ndk/swbase.git
+git clone -b kuka-ubunutu-18 git@gitlab.liberouter.org:ndk/swbase.git
 cd swbase
 sed -i "s/bin\/sh/bin\/bash/" build.sh
 sudo ./build.sh --bootstrap
