@@ -1,14 +1,3 @@
-## INFLUXDB ##
-git submodule init
-git submodule update
-mkdir influxdb-cxx/build
-cd influxdb-cxx/build
-sudo apt-get install -y libboost-all-dev
-sudo apt-get install -y libcurl4-openssl-dev
-cmake ..
-sudo make -j4 install
-cd ../..
-
 ## NFB Drivers ##
 git clone -b master git@gitlab.liberouter.org:ndk/swbase.git
 cd swbase
@@ -33,3 +22,13 @@ sed -i "s/device=generic/device=nfb/" create-deb-package.sh
 ./create-deb-package.sh
 sudo apt install ./libp4dev_*.deb
 cd ../../..
+
+## INFLUXDB ##
+git submodule init
+git submodule update
+mkdir ../influxdb-cxx/build
+cd ../influxdb-cxx/build
+sudo apt-get install -y libboost-all-dev
+sudo apt-get install -y libcurl4-openssl-dev
+cmake ..
+sudo make -j4 install
