@@ -121,7 +121,7 @@ void print_telemetric(const telemetric_hdr_t *hdr) {
  * \param pkt Input packet to prs
  * \param influxdb Database descriptor
  * \param opt Program parameters
- * \return RET_OK iff everything was fine.
+ * \return RET_OK if everything was fine
  */
 uint32_t process_packet(struct ndp_packet& pkt, std::unique_ptr<influxdb::InfluxDB> &influxdb, const options_t& opt) {
     // Prepare telemetric data into the apropriate structure
@@ -309,6 +309,64 @@ static int32_t parse_arguments(options_t* opt, int32_t argc, char** argv) {
     return RET_OK;
 }
 
+/**
+ * Processing all incoming packets
+ * \param device P4 device
+ * \param nfb NFB device
+ * \param influxdb Influx database
+ * \param opt Program parameters
+ * \return RET_OK if everything was fine
+ */
+int loop_proccess(p4device_t &device, nfb_int_dev_t &nfb, std::unique_ptr<influxdb::InfluxDB> &influxdb,
+        options_t &opt)
+{
+    uint32_t pkt_rx_ret;
+    uint32_t ret_pkt_proc;
+    struct ndp_packet packets[NDP_PACKET_BUFF]; 
+    uint32_t empty_buff = 0;
+    
+    while(!stop) {
+        // Read the packet from the buffer
+        pkt_rx_ret = ndp_rx_burst_get(nfb.rx, packets, NDP_PACKET_BUFF);
+    
+        // flush influxdb buffer
+        if(pkt_rx_ret == 0) {
+            empty_buff++;
+            if(empty_buff == 100 && influxdb != nullptr) {
+                try {   
+                    influxdb->flushBuffer();
+                } catch(...) {}
+            }
+            delay_usecs(100);
+            continue;
+        } else {
+            empty_buff = 0;
+        }
+
+        // Process all packets 
+        for(uint8_t i = 0; i < pkt_rx_ret; i++) {
+            // Increment counter for each finished one 
+            pkt_cnt++;
+            // Process packet
+            ret_pkt_proc = process_packet(packets[i], influxdb, opt);
+            if(ret_pkt_proc != RET_OK) {
+                printf("Error during the packet processing!\n");
+                close_device(&device, &opt, &nfb);
+                return RET_ERR;
+            }
+        }
+
+        // Mark all read packets as finished   
+        if(pkt_rx_ret != 0) {
+            ndp_rx_burst_put(nfb.rx); 
+        }
+    }
+   
+    close_device(&device,&opt,&nfb);
+    return RET_OK;
+}
+
+
 int32_t main(int32_t argc, char** argv) {
     // Prepare the configuration
     int32_t ret;
@@ -352,49 +410,9 @@ int32_t main(int32_t argc, char** argv) {
         close_device(&device, &opt, &nfb);
         return RET_ERR;
     }
-
-    // Loop until the CTRL+C is caught
-    uint32_t pkt_rx_ret;
-    uint32_t ret_pkt_proc;
-    struct ndp_packet packets[NDP_PACKET_BUFF]; 
-    uint32_t empty_buff = 0;
-    while(!stop) {
-        // Read the packet from the buffer
-        pkt_rx_ret = ndp_rx_burst_get(nfb.rx, packets, NDP_PACKET_BUFF);
-    
-        // flush influxdb buffer
-        if(pkt_rx_ret == 0) {
-            empty_buff++;
-            if(empty_buff == 100 && influxdb != nullptr) {
-                try {   
-                    influxdb->flushBuffer();
-                } catch(...) {}
-            }
-            delay_usecs(100);
-            continue;
-        } else {
-            empty_buff = 0;
-        }
-
-        // Process all packets 
-        for(uint8_t i = 0; i < pkt_rx_ret; i++) {
-            // Increment counter for each finished one 
-            pkt_cnt++;
-            // Process packet
-            ret_pkt_proc = process_packet(packets[i], influxdb, opt);
-            if(ret_pkt_proc != RET_OK) {
-                printf("Error during the packet processing!\n");
-                close_device(&device, &opt, &nfb);
-                return RET_ERR;
-            }
-        }
-
-        // Mark all read packets as finished   
-        if(pkt_rx_ret != 0) {
-            ndp_rx_burst_put(nfb.rx); 
-        }
-    }
    
-    close_device(&device,&opt,&nfb);
-    return RET_OK;
+    // infinite loop packet processing
+    ret = loop_proccess(device, nfb, influxdb, opt);
+    
+    return ret;
 }
