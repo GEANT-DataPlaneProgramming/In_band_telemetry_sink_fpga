@@ -23,6 +23,12 @@ sed -i "s/device=generic/device=nfb/" create-deb-package.sh
 sudo apt install ./libp4dev_*.deb
 cd ../../..
 
+## CMAKE ##
+sudo apt install -y build-essential 
+git clone https://github.com/Kitware/CMake/; cd CMake
+./bootstrap --parallel=4 && make -j4 && sudo make install
+cd ..
+
 ## INFLUXDB ##
 git submodule init
 git submodule update
