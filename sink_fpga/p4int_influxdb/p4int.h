@@ -44,7 +44,9 @@ typedef struct {
     uint8_t  verbose;                  // Print parsed data 
     uint8_t  tstmp;                    // Enables 48-bit timestamp mod 
     uint8_t  p4cfg;                    // Configure P4 device
-    uint32_t smpl_rate;                // Sampling rate 
+    uint32_t smpl_rate;                // Sampling rate
+
+    std::vector<std::array<uint8_t, 6>> ip_flt;    // Filter this flows (srouce ip and destination port)
 } options_t;
 
 // Structure with telemetric information to export 

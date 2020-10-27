@@ -136,6 +136,7 @@ int32_t influx_map(const p4device_t* device, const options_t* opt) {
     uint32_t xret;
     p4table_t *table;
     p4rule_t *rule;
+    uint32_t index;
     
     table = p4device_get_table(device, "table_influx");
     if (table == NULL) {
@@ -145,7 +146,13 @@ int32_t influx_map(const p4device_t* device, const options_t* opt) {
     // Configure default rule
     p4table_reset(table, 0);
     rule = p4table_get_rule_template(table);
-    p4rule_add_action(rule, "pkt_drop");
+    
+    if(opt->ip_flt.empty()) {
+        p4rule_add_action(rule, "fill_influx");
+    } else {
+        p4rule_add_action(rule, "pkt_drop");
+    }
+    
     p4rule_mark_default(rule);
     
     xret = p4table_insert_default_rule(table, rule);
@@ -155,30 +162,16 @@ int32_t influx_map(const p4device_t* device, const options_t* opt) {
     p4rule_free(rule); 
     
     // Configure flow filter
-    // TODO: Configure filter from cfg file and program argument
-    uint8_t ip[4]   = {196, 169, 254, 150}; // PL    
-    uint8_t ip2[4]  = {213, 95, 77, 217};   // IT 
-    uint8_t port[2] = {104, 66};  // 17000 
-
-    rule = p4table_get_rule_template(table);
-    p4rule_add_key_element(rule, p4key_exact_create("ip.srcAddr", 4, ip));
-    p4rule_add_key_element(rule, p4key_exact_create("udp.dprt", 2, port));
-    p4rule_add_action(rule, "fill_influx");
-    uint32_t index;
-    xret = p4table_insert_rule(table, rule, &index, true);   
-    p4rule_free(rule); 
-    if (xret != P4DEV_OK) {
-        return RET_ERR;
-    }
-    
-    rule = p4table_get_rule_template(table);
-    p4rule_add_key_element(rule, p4key_exact_create("ip.srcAddr", 4, ip2));
-    p4rule_add_key_element(rule, p4key_exact_create("udp.dprt", 2, port));
-    p4rule_add_action(rule, "fill_influx");
-    xret = p4table_insert_rule(table, rule, &index, true);   
-    p4rule_free(rule); 
-    if (xret != P4DEV_OK) {
-        return RET_ERR;
+    for(auto &i : opt->ip_flt) {
+        rule = p4table_get_rule_template(table);
+        p4rule_add_key_element(rule, p4key_exact_create("ip.srcAddr", 4, i.data()));
+        p4rule_add_key_element(rule, p4key_exact_create("udp.dprt", 2, i.data() + 4));
+        p4rule_add_action(rule, "fill_influx");
+        xret = p4table_insert_rule(table, rule, &index, true);   
+        p4rule_free(rule); 
+        if (xret != P4DEV_OK) {
+            return RET_ERR;
+        }
     }
 
     printf("P4INT rule for fill_infllux been configured!\n");
@@ -224,7 +217,7 @@ int32_t configure_device(const p4device_t* devices, const options_t* opt) {
     printf("Network device was enabled!\n");
 
     // TODO: segfault bug 
-    // p4device_free(&device);
+    //p4device_free(&device);
     return RET_OK;
 }
 

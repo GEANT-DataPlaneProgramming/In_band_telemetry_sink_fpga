@@ -6,6 +6,7 @@
  * Copyright (c) 2015 - 2018 CESNET, z.s.p.o.
  */
 
+#include <iostream>
 #include <cstdio>
 #include <getopt.h>
 #include <errno.h>
@@ -16,7 +17,9 @@
 #include <ctime>
 #include <cmath>
 #include <map>
-
+#include <fstream>
+#include <inttypes.h>
+    
 #include "device.h"
 #include "p4int.h"
 
@@ -197,9 +200,36 @@ void print_help(const char* prgname){
     printf("\t* -m = Set sampling rate of reporting to database (default is 1).\n"); 
     printf("\t* -v = Enable the verbose mode for printinf of parsed data.\n"); 
     printf("\t* -t = Enable 48-bit timestamp mode.\n");
-    printf("\t* -k = Force P4 device configuration.\n");
+    printf("\t* -k = Disable P4 device configuration.\n");
     printf("\t* -h = Prints the help.\n");
 }
+
+/**
+ * Load rules for flow filter
+ * \param file Load from this file
+ * \param opt Program parameters
+ */
+void load_flt(const char *file, options_t *opt)
+{
+    std::ifstream infile(file);
+    if (infile.fail()) {
+        fprintf(stderr, "Failed to open file \"%s\"\n", file);
+        exit(1);
+    }
+    
+    std::string line;
+    while (std::getline(infile, line)) {
+        std::array<uint8_t, 6> array;
+        uint16_t port;
+        
+        sscanf(line.c_str(), "%" SCNu8 ".%" SCNu8 ".%" SCNu8 ".%" SCNu8 " %" SCNu16, 
+            &array[3], &array[2], &array[1], &array[0], &port);
+        array[4] = port & 0xff;
+        array[5] = (port >> 8) & 0xff;
+
+        opt->ip_flt.push_back(array);
+    }
+}   
 
 /**
  * Parse arguments and prepare the configuration
@@ -217,14 +247,14 @@ static int32_t parse_arguments(options_t* opt, int32_t argc, char** argv) {
     opt->log = 0;
     opt->verbose = 0;
     opt->tstmp = 0;   
-    opt->p4cfg = 0;
+    opt->p4cfg = 1;
     opt->smpl_rate = 1; 
 
     int32_t op;
     char* tmp;
-    
+     
     // Parse all parameters
-    while((op = getopt(argc, argv, "d:c:p:r:u:s:b:l:m:vtkh")) != -1) {
+    while((op = getopt(argc, argv, "d:c:p:r:u:s:b:l:m:f:vtkh")) != -1) {
         switch(op) {
             case 'd':
                 // Parse the device ID
@@ -281,6 +311,11 @@ static int32_t parse_arguments(options_t* opt, int32_t argc, char** argv) {
                 opt->smpl_rate = atoi(optarg);
                 break;
             
+            case 'f':
+                // Load flow filter
+                load_flt(optarg, opt);
+                break;
+            
             case 'v':
                 // Verbose mode, print parsed data
                 opt->verbose = 1;
@@ -293,7 +328,7 @@ static int32_t parse_arguments(options_t* opt, int32_t argc, char** argv) {
             
             case 'k':
                // Configure P4 device
-               opt->p4cfg = 1;
+               opt->p4cfg = 0;
                break;
             
             case 'h':
