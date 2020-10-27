@@ -318,7 +318,7 @@ int32_t main(int32_t argc, char** argv) {
     }
     
     // Prepare influxdb
-    std::unique_ptr<influxdb::InfluxDB> influxdb;
+    std::unique_ptr<influxdb::InfluxDB> influxdb = nullptr;
     if(opt.hostValid) {
         ret = p4_influxdb_open_socket(influxdb, &opt);
         if(ret != RET_OK) {
@@ -365,7 +365,7 @@ int32_t main(int32_t argc, char** argv) {
         // flush influxdb buffer
         if(pkt_rx_ret == 0) {
             empty_buff++;
-            if(empty_buff == 100) {
+            if(empty_buff == 100 && influxdb != nullptr) {
                 try {   
                     influxdb->flushBuffer();
                 } catch(...) {}
