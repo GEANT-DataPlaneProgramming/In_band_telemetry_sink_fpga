@@ -45,7 +45,7 @@ while :
 do
 	send_mail=false
 	message=""
-	hour=$(date +"%H")
+	hour=$(expr $(date +"%H") - 0)
 	
 	# Check time
 	if (($hour >= $(echo $RANGE | awk -F- '{print $1}') && $hour <= $(echo $RANGE | awk -F- '{print $2}'))); then
