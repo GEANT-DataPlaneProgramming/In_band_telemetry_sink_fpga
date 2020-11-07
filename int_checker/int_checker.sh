@@ -48,7 +48,7 @@ do
 	hour=$(expr $(date +"%H") - 0)
 	
 	# Check time
-	if (($hour >= $(echo $RANGE | awk -F- '{print $1}') && $hour <= $(echo $RANGE | awk -F- '{print $2}') && 5 <= $(date +"%u"))); then
+	if (($hour >= $(echo $RANGE | awk -F- '{print $1}') && $hour <= $(echo $RANGE | awk -F- '{print $2}') && 5 >= $(date +"%u"))); then
 		# Reading each line
 		while read line; do
 			line_arr=($line)
