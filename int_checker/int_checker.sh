@@ -2,9 +2,10 @@
 
 RANGE="6-16"
 FILE="flt.txt"
-TIME_OUT=10
+TIME_OUT=30
 INTERFACE="enp4s0f1"
 INTERVAL=2
+SEND_MAIL_ON_SUCCESS=false
 
 # Parse parameters
 for i in "$@"
@@ -43,7 +44,7 @@ done
 
 while :
 do
-	send_mail=false
+	send_mail=$SEND_MAIL_ON_SUCCESS
 	message=""
 	hour=$(expr $(date +"%H") - 0)
 	
@@ -53,7 +54,7 @@ do
 		while read line; do
 			line_arr=($line)
 			# Capture packets
-			sudo timeout $TIME_OUT tcpdump -s 1 -w /tmp/${line_arr[0]}.pcap -i $INTERFACE src ${line_arr[0]} and dst port ${line_arr[1]} 2> /dev/null
+			sudo timeout $TIME_OUT tcpdump -nn -s 1 -w /tmp/${line_arr[0]}.pcap -i $INTERFACE src ${line_arr[0]} and dst port ${line_arr[1]} 2> /dev/null
 			pkt_num=$(tcpdump -r /tmp/${line_arr[0]}.pcap 2>/dev/null| wc -l)
 			# Check pcap
 			host_status="OK"
@@ -62,7 +63,7 @@ do
 				host_status="FAIL"
 			fi
 			# Construct message
-			message="${message}host: ${line_arr[0]}, port: ${line_arr[1]}, send: $(expr $pkt_num / $(expr $TIME_OUT - 2)) pps, status: $host_status\n"		
+			message="${message}host: ${line_arr[0]}, port: ${line_arr[1]}, send: $(expr $pkt_num / $(expr $TIME_OUT)) pps, status: $host_status\n"		
 		done < $FILE
 
 		# Send mails only on failure
