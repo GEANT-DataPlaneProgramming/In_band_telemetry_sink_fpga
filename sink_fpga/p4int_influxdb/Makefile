@@ -18,7 +18,7 @@ else
 CXXFLAGS +=-O2 -O3
 endif
 
-LIBS=-lm -lnfb -lp4dev -lInfluxDB
+LIBS=-lm -lnfb -lp4dev -lInfluxDB -lpthread
 
 p4int: $(INT_FILES)
 	@echo "Using CXXFLAGS = $(CXXFLAGS)"

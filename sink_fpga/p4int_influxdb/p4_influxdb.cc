@@ -11,6 +11,7 @@
 #include <errno.h> 
 #include <time.h>
 #include <sys/time.h>
+#include <thread> 
 
 #include "p4_influxdb.h"
 
@@ -19,7 +20,7 @@
  * \param opt Program options
  * \param err Error message 
  */
-void write_to_log_file(const options_t *opt, const std::string err) {
+static void write_to_log_file(const options_t *opt, const std::string err) {
     time_t rawtime;
     struct tm *timeinfo;
     time(&rawtime);
@@ -32,42 +33,13 @@ void write_to_log_file(const options_t *opt, const std::string err) {
     fclose(file);
 }
 
-uint32_t p4_influxdb_send_packet(std::unique_ptr<influxdb::InfluxDB> &influxdb, const telemetric_hdr_t& telemetric, const options_t* opt) {
-    if(influxdb == nullptr){
-        fprintf(stderr, "ERR: You have to call function open_socket before send_packet\n");
-        return RET_ERR;
-    }
-    
-    try {
-        // Send report
-        influxdb->write(influxdb::Point{"int_telemetry"}
-            .addTag("srcip",std::string(telemetric.srcIp))
-            .addTag("dstip",std::string(telemetric.dstIp))
-            .addTag("srcp", std::to_string(telemetric.srcPort))
-            .addTag("dstp", std::to_string(telemetric.dstPort))
-            .addField("origts", static_cast<long long int>(telemetric.origTs))
-            .addField("dstts", static_cast<long long int>(telemetric.dstTs))
-            .addField("seq", static_cast<long long int>(telemetric.seqNum))
-            .addField("delay", static_cast<long long int>(telemetric.delay))
-            .addField("sink_jitter", static_cast<long long int>(telemetric.sink_jitter))
-            .addField("reordering", static_cast<long long int>(telemetric.reordering))
-			.setNanoTime(static_cast<long long int>(telemetric.dstTs)));
-
-    } catch (const std::runtime_error& e) {
-        if(opt->log == 1) {
-            write_to_log_file(opt, e.what());
-            return RET_OK;
-        }
-        else {
-            std::cerr << e.what() << std::endl;
-   	        return RET_ERR;
-        }
-    } catch(...) {}
-    
-    return RET_OK;
-}
-
-uint32_t p4_influxdb_open_socket(std::unique_ptr<influxdb::InfluxDB> &influxdb, const options_t* opt) {
+/**
+ * Open the socket
+ * \param socketfd Pointer to output socket variable
+ * \param opt Options to be used
+ * \return \ref RET_OK on success
+ */
+static uint32_t p4_influxdb_open_socket(std::unique_ptr<influxdb::InfluxDB> &influxdb, const options_t* opt) {
     std::string host(opt->host);
     std::string port = std::to_string(opt->port);
     std::string protocol(opt->protocol);
@@ -84,9 +56,64 @@ uint32_t p4_influxdb_open_socket(std::unique_ptr<influxdb::InfluxDB> &influxdb, 
     } catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
         influxdb = NULL;
-    	return RET_ERR;
+        return RET_ERR;
     }
     return RET_OK;
 }
 
+
+
+/**
+ * Convert raw data to the int reports and send them to the influxdb
+ * \param data Raw int data
+ * \param opt Program options
+ */
+static void fill(std::vector<telemetric_hdr_t> data, const options_t* opt)
+{
+    if(opt->hostValid) {
+        // Initialize connection to the influxdb
+        std::unique_ptr<influxdb::InfluxDB> influxdb = nullptr;
+        int ret = p4_influxdb_open_socket(influxdb, opt);
+        if(ret != RET_OK) {
+            write_to_log_file(opt, "Unable to connect to the Inxlux DB");
+            return;
+        }
+    
+        try {
+            for(auto &telemetric : data) {
+                // Send report
+                influxdb->write(influxdb::Point{"int_telemetry"}
+                    .addTag("srcip",std::string(telemetric.srcIp))
+                    .addTag("dstip",std::string(telemetric.dstIp))
+                    .addTag("srcp", std::to_string(telemetric.srcPort))
+                    .addTag("dstp", std::to_string(telemetric.dstPort))
+                    .addField("origts", static_cast<long long int>(telemetric.origTs))
+                    .addField("dstts", static_cast<long long int>(telemetric.dstTs))
+                    .addField("seq", static_cast<long long int>(telemetric.seqNum))
+                    .addField("delay", static_cast<long long int>(telemetric.delay))
+                    .addField("sink_jitter", static_cast<long long int>(telemetric.sink_jitter))
+                    .addField("reordering", static_cast<long long int>(telemetric.reordering))
+                    .setNanoTime(static_cast<long long int>(telemetric.dstTs)));
+            }
+            // flush buffer 
+            influxdb->flushBuffer();
+
+        } catch (const std::runtime_error& e) {
+            if(opt->log == 1) {
+                write_to_log_file(opt, e.what());
+            }
+        } catch (...) {}            
+    }
+}
+
+static std::vector<telemetric_hdr_t> raw_buff; // raw int data buffer
+uint32_t p4_influxdb_send_packet(const telemetric_hdr_t& telemetric, const options_t* opt) {
+    raw_buff.push_back(telemetric);
+    if(raw_buff.size() == opt->raw_buffer) {
+        std::thread(fill, raw_buff, opt).detach();
+        raw_buff.clear();
+    }
+
+    return RET_OK;
+}
 

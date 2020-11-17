@@ -126,7 +126,7 @@ void print_telemetric(const telemetric_hdr_t *hdr) {
  * \param opt Program parameters
  * \return RET_OK if everything was fine
  */
-uint32_t process_packet(struct ndp_packet& pkt, std::unique_ptr<influxdb::InfluxDB> &influxdb, const options_t& opt) {
+uint32_t process_packet(struct ndp_packet& pkt, const options_t& opt) {
     // Prepare telemetric data into the apropriate structure
     telemetric_hdr_t tmpHdr;
 
@@ -167,7 +167,7 @@ uint32_t process_packet(struct ndp_packet& pkt, std::unique_ptr<influxdb::Influx
 
     // Report to influxdb
     if(opt.hostValid && (pkt_cnt % opt.smpl_rate == 0)) {
-        uint32_t ret = p4_influxdb_send_packet(influxdb,tmpHdr, &opt);
+        uint32_t ret = p4_influxdb_send_packet(tmpHdr, &opt);
         if(ret != RET_OK) {
             printf("Error during the export to InfluxDB\n");
             return RET_ERR;
@@ -188,7 +188,7 @@ uint32_t process_packet(struct ndp_packet& pkt, std::unique_ptr<influxdb::Influx
 void print_help(const char* prgname){
     printf("%s [-d device] [-c collectorAddress] [-p collectorPort] [-r collectorProtocol]" 
            " [-u username] [-s password] [-b numOfReports] [-l logFile] [-m samplingRate]"
-           " [-vtkh]\n", prgname);
+           " [-i buffer_size] [-vtkh]\n", prgname);
     printf("\t* -d = ID of the device (e.g.,0 stands for /dev/nfb0, default is 0).\n");
     printf("\t* -c = Host address of the collector.\n");
     printf("\t* -p = Port of collector.\n");
@@ -198,6 +198,7 @@ void print_help(const char* prgname){
     printf("\t* -b = How many reports send at once (default is 1000).\n"); 
     printf("\t* -l = Error messages will be written to given log file.\n"); 
     printf("\t* -m = Set sampling rate of reporting to database (default is 1).\n"); 
+    printf("\t* -i = Size of internal buffer for raw int data.\n"); 
     printf("\t* -v = Enable the verbose mode for printinf of parsed data.\n"); 
     printf("\t* -t = Enable 48-bit timestamp mode.\n");
     printf("\t* -k = Disable P4 device configuration.\n");
@@ -248,13 +249,14 @@ static int32_t parse_arguments(options_t* opt, int32_t argc, char** argv) {
     opt->verbose = 0;
     opt->tstmp = 0;   
     opt->p4cfg = 1;
-    opt->smpl_rate = 1; 
+    opt->smpl_rate = 1;
+    opt->raw_buffer = 1000000; 
 
     int32_t op;
     char* tmp;
      
     // Parse all parameters
-    while((op = getopt(argc, argv, "d:c:p:r:u:s:b:l:m:f:vtkh")) != -1) {
+    while((op = getopt(argc, argv, "d:c:p:r:u:s:b:l:m:f:i:vtkh")) != -1) {
         switch(op) {
             case 'd':
                 // Parse the device ID
@@ -316,6 +318,11 @@ static int32_t parse_arguments(options_t* opt, int32_t argc, char** argv) {
                 load_flt(optarg, opt);
                 break;
             
+            case 'i':
+                // Size of internal raw buffer
+                opt->raw_buffer = atoi(optarg);
+                break;
+            
             case 'v':
                 // Verbose mode, print parsed data
                 opt->verbose = 1;
@@ -348,17 +355,14 @@ static int32_t parse_arguments(options_t* opt, int32_t argc, char** argv) {
  * Processing all incoming packets
  * \param device P4 device
  * \param nfb NFB device
- * \param influxdb Influx database
  * \param opt Program parameters
  * \return RET_OK if everything was fine
  */
-int loop_proccess(p4device_t &device, nfb_int_dev_t &nfb, std::unique_ptr<influxdb::InfluxDB> &influxdb,
-        options_t &opt)
+int loop_proccess(p4device_t &device, nfb_int_dev_t &nfb, options_t &opt)
 {
     uint32_t pkt_rx_ret;
     uint32_t ret_pkt_proc;
     struct ndp_packet packets[NDP_PACKET_BUFF]; 
-    uint32_t empty_buff = 0;
     
     while(!stop) {
         // Read the packet from the buffer
@@ -366,16 +370,8 @@ int loop_proccess(p4device_t &device, nfb_int_dev_t &nfb, std::unique_ptr<influx
     
         // flush influxdb buffer
         if(pkt_rx_ret == 0) {
-            empty_buff++;
-            if(empty_buff == 100 && influxdb != nullptr) {
-                try {   
-                    influxdb->flushBuffer();
-                } catch(...) {}
-            }
             delay_usecs(100);
             continue;
-        } else {
-            empty_buff = 0;
         }
 
         // Process all packets 
@@ -383,7 +379,7 @@ int loop_proccess(p4device_t &device, nfb_int_dev_t &nfb, std::unique_ptr<influx
             // Increment counter for each finished one 
             pkt_cnt++;
             // Process packet
-            ret_pkt_proc = process_packet(packets[i], influxdb, opt);
+            ret_pkt_proc = process_packet(packets[i], opt);
             if(ret_pkt_proc != RET_OK) {
                 printf("Error during the packet processing!\n");
                 close_device(&device, &opt, &nfb);
@@ -408,16 +404,6 @@ int32_t main(int32_t argc, char** argv) {
     options_t opt;
     if(parse_arguments(&opt, argc, argv) != RET_OK) {
         return RET_ERR;
-    }
-    
-    // Prepare influxdb
-    std::unique_ptr<influxdb::InfluxDB> influxdb = nullptr;
-    if(opt.hostValid) {
-        ret = p4_influxdb_open_socket(influxdb, &opt);
-        if(ret != RET_OK) {
-            printf("Unable to connect to the Inxlux DB\n");
-            return RET_ERR;
-        }
     }
     
     // Prepare device 
@@ -447,7 +433,7 @@ int32_t main(int32_t argc, char** argv) {
     }
    
     // infinite loop packet processing
-    ret = loop_proccess(device, nfb, influxdb, opt);
+    ret = loop_proccess(device, nfb, opt);
     
     return ret;
 }
