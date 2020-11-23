@@ -22,6 +22,7 @@
     
 #include "device.h"
 #include "p4int.h"
+#include "p4_influxdb.h"
 
 /**
  * Packet counter
@@ -49,7 +50,7 @@ void setup_stop(int sig) {
 /**
  * Sleep in microseconds
  */
-static void delay_usecs(unsigned int us)
+void delay_usecs(unsigned int us)
 {
     struct timespec t1;
     struct timespec t2;
@@ -126,7 +127,7 @@ void print_telemetric(const telemetric_hdr_t *hdr) {
  * \param opt Program parameters
  * \return RET_OK if everything was fine
  */
-uint32_t process_packet(struct ndp_packet& pkt, const options_t& opt) {
+uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const options_t& opt) {
     // Prepare telemetric data into the apropriate structure
     telemetric_hdr_t tmpHdr;
 
@@ -167,10 +168,10 @@ uint32_t process_packet(struct ndp_packet& pkt, const options_t& opt) {
 
     // Report to influxdb
     if(opt.hostValid && (pkt_cnt % opt.smpl_rate == 0)) {
-        uint32_t ret = p4_influxdb_send_packet(tmpHdr, &opt);
-        if(ret != RET_OK) {
+        uint32_t ret = exporter.sendData(tmpHdr);
+        if(ret != EXIT_SUCCESS) {
             printf("Error during the export to InfluxDB\n");
-            return RET_ERR;
+            //return RET_ERR;
         }
     }  
       
@@ -358,7 +359,7 @@ static int32_t parse_arguments(options_t* opt, int32_t argc, char** argv) {
  * \param opt Program parameters
  * \return RET_OK if everything was fine
  */
-int loop_proccess(p4device_t &device, nfb_int_dev_t &nfb, options_t &opt)
+int loop_proccess(p4device_t &device, nfb_int_dev_t &nfb, IntExporter &exporter, options_t &opt)
 {
     uint32_t pkt_rx_ret;
     uint32_t ret_pkt_proc;
@@ -379,7 +380,7 @@ int loop_proccess(p4device_t &device, nfb_int_dev_t &nfb, options_t &opt)
             // Increment counter for each finished one 
             pkt_cnt++;
             // Process packet
-            ret_pkt_proc = process_packet(packets[i], opt);
+            ret_pkt_proc = process_packet(packets[i], exporter, opt);
             if(ret_pkt_proc != RET_OK) {
                 printf("Error during the packet processing!\n");
                 close_device(&device, &opt, &nfb);
@@ -431,9 +432,12 @@ int32_t main(int32_t argc, char** argv) {
         close_device(&device, &opt, &nfb);
         return RET_ERR;
     }
-   
+  
+    // Prepare exporter 
+    IntExporter exporter(1, &opt);
+    
     // infinite loop packet processing
-    ret = loop_proccess(device, nfb, opt);
+    ret = loop_proccess(device, nfb, exporter, opt);
     
     return ret;
 }

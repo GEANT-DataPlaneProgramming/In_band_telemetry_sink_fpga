@@ -6,13 +6,13 @@
  * Copyright (c) 2015 - 2018 CESNET, z.s.p.o.
  */
 
-#include <cstdint>
-#include <stdio.h>
-
-#include "p4_influxdb.h"
-
 #ifndef _P4INT_H_
 #define _P4INT_H_
+
+#include <cstdint>
+#include <stdio.h>
+#include <vector>
+#include <array>
 
 // Success return code
 #define RET_OK 0
@@ -46,7 +46,6 @@ typedef struct {
     uint8_t  p4cfg;                    // Configure P4 device
     uint32_t smpl_rate;                // Sampling rate
     uint32_t raw_buffer;               // Size of buffer for raw int data
-
     std::vector<std::array<uint8_t, 6>> ip_flt; // Filter this flows (srouce ip and destination port)
 } options_t;
 
@@ -69,5 +68,10 @@ struct meta_data {
     uint64_t seq = 0;        // Current sequence number
     uint64_t prev_dstTs = 0; // Previous destination timestamp
 };
+
+/**
+ * Sleep in microseconds
+ */
+void delay_usecs(unsigned int us);
 
 #endif //_P4_INT_H_
