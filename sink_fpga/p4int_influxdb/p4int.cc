@@ -2,8 +2,6 @@
  * @author Mario Kuka <kuka@cesnet.cz>
  *         Pavlina Patova <xpatov00@stud.fit.vutbr.cz>
  * @brief INT sink node
- *     
- * Copyright (c) 2015 - 2018 CESNET, z.s.p.o.
  */
 
 #include <iostream>
@@ -30,6 +28,12 @@
 uint64_t pkt_cnt = 0;
 
 /**
+ * Packet drop counter
+ */
+uint64_t pkt_drop = 0;
+
+
+/**
  * Helping control variable
  */
 volatile sig_atomic_t stop = 0;
@@ -43,31 +47,34 @@ static std::map<uint64_t, meta_data> flow_map;
  * Setup the stop flag 
  */
 void setup_stop(int sig) {
-    printf("%lu\n", pkt_cnt);
+    printf("\ntotal - %lu\ndrop - %lu\n", pkt_cnt, pkt_drop);
     stop = 1;
 }
 
 /**
  * Sleep in microseconds
+ * \param us Number of microseconds
  */
-void delay_usecs(unsigned int us)
-{
+void delay_usecs(unsigned int us) {
     struct timespec t1;
     struct timespec t2;
 
-    if (us == 0)
+    if (us == 0) {
         return;
+    }
 
     t1.tv_sec = (us / 1000000);
     t1.tv_nsec = (us % 1000000) * 1000;
 
     // NB: Other variants of sleep block whole process.
 retry:
-    if (nanosleep((const struct timespec *)&t1, &t2) == -1)
+    if (nanosleep((const struct timespec *)&t1, &t2) == -1) {
         if (errno == EINTR) {
             t1 = t2; 
             goto retry;
         }
+    }
+
     return;
 }
 
@@ -107,6 +114,7 @@ uint64_t ntoh64(uint64_t value) {
 
 /**
  * Print telemetric data
+ * \param hdr Structureof telemetric data
  */
 void print_telemetric(const telemetric_hdr_t *hdr) {
     printf("Orig TS       => %lu\n", hdr->origTs);
@@ -158,20 +166,29 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
    
     // Calculate int header
     tmpHdr.delay = tmpHdr.dstTs - tmpHdr.origTs;
-    tmpHdr.seqNum = meta_tmp.seq; 
+    tmpHdr.seqNum = ntohl((*(uint32_t*)(pkt.data + 44))); 
     tmpHdr.sink_jitter = tmpHdr.dstTs - meta_tmp.prev_dstTs;
-    tmpHdr.reordering = 0;   
+    
+    if(meta_tmp.seq == 0) {
+        tmpHdr.reordering = 0; 
+    } else {
+        tmpHdr.reordering = tmpHdr.seqNum - meta_tmp.seq - 1; 
+    } 
     
     // Update flow data
     meta_tmp.prev_dstTs = tmpHdr.dstTs;
-    meta_tmp.seq++;
+    meta_tmp.seq = tmpHdr.seqNum;
 
     // Report to influxdb
     if(opt.hostValid && (pkt_cnt % opt.smpl_rate == 0)) {
         uint32_t ret = exporter.sendData(tmpHdr);
         if(ret != EXIT_SUCCESS) {
-            printf("Error during the export to InfluxDB\n");
+            //printf("Error during the export to InfluxDB\n");
             //return RET_ERR;
+            pkt_drop++;
+            if(pkt_drop % 1000 == 0 && pkt_drop != 0) {
+                std::cout << "dopped: " << pkt_drop << std::endl;
+            }
         }
     }  
       
@@ -185,8 +202,9 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
 
 /** 
  * Print the help
+ * \param prgname Name of program 
  */
-void print_help(const char* prgname){
+void print_help(const char* prgname) {
     printf("%s [-d device] [-c collectorAddress] [-p collectorPort] [-r collectorProtocol]" 
            " [-u username] [-s password] [-b numOfReports] [-l logFile] [-m samplingRate]"
            " [-i buffer_size] [-vtkh]\n", prgname);
@@ -199,7 +217,7 @@ void print_help(const char* prgname){
     printf("\t* -b = How many reports send at once (default is 1000).\n"); 
     printf("\t* -l = Error messages will be written to given log file.\n"); 
     printf("\t* -m = Set sampling rate of reporting to database (default is 1).\n"); 
-    printf("\t* -i = Size of internal buffer for raw int data.\n"); 
+    printf("\t* -i = Number of senders.\n"); 
     printf("\t* -v = Enable the verbose mode for printinf of parsed data.\n"); 
     printf("\t* -t = Enable 48-bit timestamp mode.\n");
     printf("\t* -k = Disable P4 device configuration.\n");
@@ -211,8 +229,7 @@ void print_help(const char* prgname){
  * \param file Load from this file
  * \param opt Program parameters
  */
-void load_flt(const char *file, options_t *opt)
-{
+void load_flt(const char *file, options_t *opt) {
     std::ifstream infile(file);
     if (infile.fail()) {
         fprintf(stderr, "Failed to open file \"%s\"\n", file);
@@ -251,7 +268,7 @@ static int32_t parse_arguments(options_t* opt, int32_t argc, char** argv) {
     opt->tstmp = 0;   
     opt->p4cfg = 1;
     opt->smpl_rate = 1;
-    opt->raw_buffer = 1000000; 
+    opt->raw_buffer = 1; 
 
     int32_t op;
     char* tmp;
@@ -359,8 +376,7 @@ static int32_t parse_arguments(options_t* opt, int32_t argc, char** argv) {
  * \param opt Program parameters
  * \return RET_OK if everything was fine
  */
-int loop_proccess(p4device_t &device, nfb_int_dev_t &nfb, IntExporter &exporter, options_t &opt)
-{
+int loop_proccess(p4device_t &device, nfb_int_dev_t &nfb, IntExporter &exporter, options_t &opt) {
     uint32_t pkt_rx_ret;
     uint32_t ret_pkt_proc;
     struct ndp_packet packets[NDP_PACKET_BUFF]; 
@@ -434,7 +450,7 @@ int32_t main(int32_t argc, char** argv) {
     }
   
     // Prepare exporter 
-    IntExporter exporter(1, &opt);
+    IntExporter exporter(&opt);
     
     // infinite loop packet processing
     ret = loop_proccess(device, nfb, exporter, opt);

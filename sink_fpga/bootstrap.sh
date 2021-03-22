@@ -30,11 +30,11 @@ git clone https://github.com/Kitware/CMake/; cd CMake
 cd ..
 
 ## INFLUXDB ##
-git submodule init
-git submodule update
-mkdir ../influxdb-cxx/build
-cd ../influxdb-cxx/build
-sudo apt-get install -y libboost-all-dev
-sudo apt-get install -y libcurl4-openssl-dev
-cmake ..
-sudo make -j4 install
+#git submodule init
+#git submodule update
+#mkdir ../influxdb-cxx/build
+#cd ../influxdb-cxx/build
+#sudo apt-get install -y libboost-all-dev
+#sudo apt-get install -y libcurl4-openssl-dev
+#cmake ..
+#sudo make -j4 install

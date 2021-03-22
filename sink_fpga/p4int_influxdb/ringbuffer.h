@@ -1,3 +1,7 @@
+/**
+ * @author Mario Kuka <kuka@cesnet.cz>
+ */
+
 #ifndef INT_RINGBUFFER_H
 #define INT_RINGBUFFER_H
 

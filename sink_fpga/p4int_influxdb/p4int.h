@@ -2,8 +2,6 @@
  * @author Mario Kuka <kuka@cesnet.cz>
  *         Pavlina Patova <xpatov00@stud.fit.vutbr.cz>
  * @brief Header file of INT sink node
- *     
- * Copyright (c) 2015 - 2018 CESNET, z.s.p.o.
  */
 
 #ifndef _P4INT_H_
@@ -60,7 +58,7 @@ typedef struct {
    uint64_t    seqNum;              // Sequence number of the received frame
    uint64_t    delay;               // Difference between the dest. and orig. timestamp
    uint64_t    sink_jitter;         // Difference between the dest timestamp of current packet and the previous
-   uint64_t    reordering;              
+   int64_t     reordering;              
 } telemetric_hdr_t;
 
 // Flow metadata structure 

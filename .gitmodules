@@ -1,3 +1,0 @@
-[submodule "influxdb-cxx"]
-	path = influxdb-cxx
-	url = https://github.com/MarioKuka/influxdb-cxx
