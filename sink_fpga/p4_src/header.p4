@@ -96,13 +96,19 @@ header_type infux_t {
     fields {
         srcAddr         : 32;
         dstAddr         : 32;
+        node_cnt        : 8;
+    }
+}
+
+header_type inf_node_t {
+    fields {
         ingress_port_id : 16;
         egress_port_id  : 16;
         ingress_tstamp  : 64;
         egress_tstamp   : 64;
         ndk_tstamp      : 64;
         delay           : 64;
-        padding         : 160;        
+//        padding         : 160;        
     }
 }
 
