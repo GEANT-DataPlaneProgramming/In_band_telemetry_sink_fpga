@@ -1,92 +1,162 @@
 /**
  * @author Mario Kuka <kuka@cesnet.cz>
- *         Pavlina Patova <xpatov00@stud.fit.vutbr.cz>
- * @brief Header file of INT sink node
- * 
- * Copyright (c) 2015 - 2018 CESNET, z.s.p.o.
- */
+ */ 
 
 #include <string>
 #include <iostream>
-#include <errno.h> 
-#include <time.h>
-#include <sys/time.h>
+#include <thread> 
+#include <sstream>
 
 #include "p4_influxdb.h"
+#include "UDP.h"
+#include "HTTP.h"
+
+#define POP_THRESHOLD 10
+#define RECORD_SIZE 210
 
 /**
- * Write error message to log file
+ * Read records from ring buffer and send them to the database by HTTP protocol.
+ * \param ring Selected ring buffer
  * \param opt Program options
- * \param err Error message 
+ * \param id Sender ID
  */
-void write_to_log_file(const options_t *opt, const std::string err) {
-    time_t rawtime;
-    struct tm *timeinfo;
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-    FILE* file = fopen(opt->logFile, "a");
-    if(file != NULL) {
-        fprintf(file,"%s: %s\n", asctime(timeinfo), err.c_str());
+static void http_sender(ringbuffer<telemetric_hdr_t, RING_BUFFER_SIZE> *ring, const options_t* opt, uint32_t id)
+{
+    // Prepare udp socket
+    std::string url = std::string(opt->protocol) + "://" + std::string(opt->host) + ":" + std::to_string(opt->port) + "?db=int_telemetry_db";
+    HTTP http_sock(url);
+    http_sock.enableBasicAuth(std::string(opt->username) + ":" + std::string(opt->password));
+
+    std::string data;
+    data.reserve(RECORD_SIZE * opt->batch);
+    char report[400];
+    uint32_t it = 0;     
+
+    while(true) {
+        telemetric_hdr_t telemetric; 
+        
+        // If the buffer is empty, all processed records are flushed to the database.
+        uint32_t flush = 0;
+        while(!ring->pop(telemetric)) {
+            delay_usecs(100);
+            flush++; 
+        
+            if(flush == POP_THRESHOLD and !data.empty() and opt->hostValid) {
+                try {
+                    http_sock.send(data);
+                } catch (std::runtime_error& e) {
+                    std::stringstream msg;
+                    std::cerr << msg.str();
+                }
+                it = 0;
+                data.clear();
+            }
+        }
+        
+        // Prepare http datagram and send it
+        if(opt->hostValid) {
+            sprintf(report,
+                "int_telemetry,srcip=%s,dstip=%s,srcp=%u,dstp=%u origts=%lu,dstts=%lu,seq=%lu,delay=%lu,sink_jitter=%lu,reordering=%ld %lu\n",
+                telemetric.srcIp, telemetric.dstIp, telemetric.srcPort, telemetric.dstPort, telemetric.origTs, telemetric.dstTs,
+                telemetric.seqNum, telemetric.delay, telemetric.sink_jitter, telemetric.reordering, telemetric.dstTs);
+            data.append(report);
+            it++;
+            
+            // Chekc Batch threshold
+            if(it == opt->batch) {
+                try {
+                    http_sock.send(data);
+                } catch (std::runtime_error& e) {
+                    std::stringstream msg;
+                    std::cerr << msg.str();
+                }
+                it = 0;
+                data.clear();
+            }       
+        }
     }
-    fflush(file);
-    fclose(file);
 }
 
-uint32_t p4_influxdb_send_packet(std::unique_ptr<influxdb::InfluxDB> &influxdb, const telemetric_hdr_t& telemetric, const options_t* opt) {
-    if(influxdb == nullptr){
-        fprintf(stderr, "ERR: You have to call function open_socket before send_packet\n");
-        return RET_ERR;
-    }
-    
-    try {
-        // Send report
-        influxdb->write(influxdb::Point{"int_telemetry"}
-            .addTag("srcip",std::string(telemetric.srcIp))
-            .addTag("dstip",std::string(telemetric.dstIp))
-            .addTag("srcp", std::to_string(telemetric.srcPort))
-            .addTag("dstp", std::to_string(telemetric.dstPort))
-            .addField("origts", static_cast<long long int>(telemetric.origTs))
-            .addField("dstts", static_cast<long long int>(telemetric.dstTs))
-            .addField("seq", static_cast<long long int>(telemetric.seqNum))
-            .addField("delay", static_cast<long long int>(telemetric.delay))
-            .addField("sink_jitter", static_cast<long long int>(telemetric.sink_jitter))
-            .addField("reordering", static_cast<long long int>(telemetric.reordering))
-			.setNanoTime(static_cast<long long int>(telemetric.dstTs)));
+/**
+ * Read records from ring buffer and send them to the database by UDP piotocol.
+ * \param ring Selected ring buffer
+ * \param opt Program options
+ * \param id Sender ID
+ */
+static void udp_sender(ringbuffer<telemetric_hdr_t, RING_BUFFER_SIZE> *ring, const options_t* opt, uint32_t id)
+{
+    // Prepare udp socket
+    INT_UDP udp_sock(std::string(opt->host), opt->port);
 
-    } catch (const std::runtime_error& e) {
-        if(opt->log == 1) {
-            write_to_log_file(opt, e.what());
-            return RET_OK;
+    std::string data;
+    data.reserve(65527);
+    char report[400];
+    uint32_t it = 0;     
+
+    while(true) {
+        // read data
+        telemetric_hdr_t telemetric; 
+        while(!ring->pop(telemetric)) {
+            delay_usecs(100); 
         }
-        else {
-            std::cerr << e.what() << std::endl;
-   	        return RET_ERR;
+        
+        // prepare udp datagram and send it
+        if(opt->hostValid) {
+            sprintf(report,
+                "int_telemetry,srcip=%s,dstip=%s,srcp=%u,dstp=%u origts=%lu,dstts=%lu,seq=%lu,delay=%lu,sink_jitter=%lu,reordering=%lu %lu\n",
+                telemetric.srcIp, telemetric.dstIp, telemetric.srcPort, telemetric.dstPort, telemetric.origTs, telemetric.dstTs,
+                telemetric.seqNum, telemetric.delay, telemetric.sink_jitter, telemetric.reordering, telemetric.dstTs);
+            
+            data.append(report);
+            it++;
+               
+            if(it == opt->batch) { 
+                try {
+                    udp_sock.send(data); 
+                } catch (std::runtime_error& e) {
+                    std::stringstream msg;
+                    msg << "ID:" << id << ", error: "  << e.what() << std::endl;
+                    std::cerr << msg.str();
+                }
+                it = 0;
+                data.clear();
+            }       
         }
-    } catch(...) {}
-    
-    return RET_OK;
+    }
 }
 
-uint32_t p4_influxdb_open_socket(std::unique_ptr<influxdb::InfluxDB> &influxdb, const options_t* opt) {
-    std::string host(opt->host);
-    std::string port = std::to_string(opt->port);
-    std::string protocol(opt->protocol);
-    std::string username(opt->username);
-    std::string passwd(opt->password);
+IntExporter::IntExporter(const options_t *opt)
+{
+    m_th_num = opt->raw_buffer;
+    m_rr_index = 0;
 
-    // "[protocol]://[username:password@]host:port[/?db=database]"
-    std::string conString = protocol + "://" + username + ":" + passwd + "@" + 
-        host + ":" + port + "/?db=int_telemetry";
-
-    try {
-        influxdb = influxdb::InfluxDBFactory::Get(conString);  
-        influxdb->batchOf(opt->batch);  
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
-        influxdb = NULL;
-    	return RET_ERR;
+    for(uint32_t i = 0; i < m_th_num; i++) {
+        // Prepare ring buffer and start sender
+        m_ring_buffs.push_back(new ringbuffer<telemetric_hdr_t, RING_BUFFER_SIZE>());
+        
+        if(std::string(opt->protocol) == "udp") {
+            std::thread(udp_sender, m_ring_buffs.back(), opt, i).detach();
+        } else if(std::string(opt->protocol) == "http" || std::string(opt->protocol) == "https") {
+            std::thread(http_sender, m_ring_buffs.back(), opt, i).detach();
+        } else {
+            throw std::runtime_error("Unknown protocol");
+        }
+        delay_usecs(1000); 
     }
-    return RET_OK;
+}
+
+bool IntExporter::sendData(const telemetric_hdr_t& telemetric) 
+{
+    // round robin selection
+    for(uint32_t i = 0; i < m_th_num; i++) {
+        m_rr_index = (m_rr_index + 1) % m_th_num;   
+        if(m_ring_buffs[m_rr_index]->push(telemetric)) {
+            return EXIT_SUCCESS;
+        } else {
+            continue;
+        }
+    }
+    return EXIT_FAILURE;
 }
 
 

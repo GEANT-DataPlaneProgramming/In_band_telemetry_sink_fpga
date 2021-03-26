@@ -1,9 +1,6 @@
 /**
  * @author Mario Kuka <kuka@cesnet.cz>
  *         Pavlina Patova <xpatov00@stud.fit.vutbr.cz>
- * @brief Header file of INT sink node
- *     
- * Copyright (c) 2015 - 2018 CESNET, z.s.p.o.
  */
 
 #include <cstring>
@@ -52,7 +49,7 @@ int32_t open_device(p4device_t* device, options_t* opt, nfb_int_dev_t* nfb) {
 }
 
 void close_device(p4device_t* device, options_t* opt, nfb_int_dev_t* nfb) {
-    // Close the device
+    // Close device
     if(nfb->rx){
         ndp_queue_stop(nfb->rx);
         ndp_close_rx_queue(nfb->rx);
@@ -127,6 +124,71 @@ int32_t dma_map(const p4device_t* device, const options_t* opt) {
 }
 
 /**
+ * Configre p4 table "table_tcp" and "table_udp"
+ * \param device Device structure
+ * \param opt Options of the device tree.
+ * \return \ref RET_OK on success
+ */
+int32_t udp_tcp_map(const p4device_t* device, const options_t* opt) {
+    uint32_t xret;
+    p4table_t *table;
+    p4rule_t *rule;
+
+    // TCP
+    table = p4device_get_table(device, "table_tcp");
+    if (table == NULL) {
+        return RET_ERR;
+    }
+    
+    rule = p4table_get_rule_template(table);
+    p4rule_add_action(rule, "remove_tcp");
+    p4rule_mark_default(rule);
+    
+    xret = p4table_insert_default_rule(table, rule);
+    if (xret != P4DEV_OK) {
+        return RET_ERR;
+    }
+    printf("P4INT rule for table_tcp been configured!\n");
+    p4rule_free(rule); 
+   
+    // UDP 
+    table = p4device_get_table(device, "table_udp");
+    if (table == NULL) {
+        return RET_ERR;
+    }
+    
+    rule = p4table_get_rule_template(table);
+    p4rule_add_action(rule, "remove_udp");
+    p4rule_mark_default(rule);
+    
+    xret = p4table_insert_default_rule(table, rule);
+    if (xret != P4DEV_OK) {
+        return RET_ERR;
+    }
+    printf("P4INT rule for table_udp been configured!\n");
+    p4rule_free(rule); 
+   
+    // DROP
+    table = p4device_get_table(device, "table_drop");
+    if (table == NULL) {
+        return RET_ERR;
+    }
+    
+    rule = p4table_get_rule_template(table);
+    p4rule_add_action(rule, "pkt_drop");
+    p4rule_mark_default(rule);
+    
+    xret = p4table_insert_default_rule(table, rule);
+    if (xret != P4DEV_OK) {
+        return RET_ERR;
+    }
+    printf("P4INT rule for table_drop been configured!\n");
+    p4rule_free(rule); 
+    
+    return RET_OK;
+}
+
+/**
  * Configre p4 table "table_influx"
  * \param device Device structure
  * \param opt Options of the device tree.
@@ -165,7 +227,7 @@ int32_t influx_map(const p4device_t* device, const options_t* opt) {
     for(auto &i : opt->ip_flt) {
         rule = p4table_get_rule_template(table);
         p4rule_add_key_element(rule, p4key_exact_create("ip.srcAddr", 4, i.data()));
-        p4rule_add_key_element(rule, p4key_exact_create("udp.dprt", 2, i.data() + 4));
+        p4rule_add_key_element(rule, p4key_exact_create("influx.egress_port_id", 2, i.data() + 4));
         p4rule_add_action(rule, "fill_influx");
         xret = p4table_insert_rule(table, rule, &index, true);   
         p4rule_free(rule); 
@@ -206,6 +268,9 @@ int32_t configure_device(const p4device_t* devices, const options_t* opt) {
         return RET_ERR;
     }    
     if(influx_map(&device, opt) != RET_OK) {
+        return RET_ERR;
+    }    
+    if(udp_tcp_map(&device, opt) != RET_OK) {
         return RET_ERR;
     }    
    

@@ -2,17 +2,15 @@
  * @author Mario Kuka <kuka@cesnet.cz>
  *         Pavlina Patova <xpatov00@stud.fit.vutbr.cz>
  * @brief Header file of INT sink node
- *     
- * Copyright (c) 2015 - 2018 CESNET, z.s.p.o.
  */
-
-#include <cstdint>
-#include <stdio.h>
-
-#include "p4_influxdb.h"
 
 #ifndef _P4INT_H_
 #define _P4INT_H_
+
+#include <cstdint>
+#include <stdio.h>
+#include <vector>
+#include <array>
 
 // Success return code
 #define RET_OK 0
@@ -45,8 +43,8 @@ typedef struct {
     uint8_t  tstmp;                    // Enables 48-bit timestamp mod 
     uint8_t  p4cfg;                    // Configure P4 device
     uint32_t smpl_rate;                // Sampling rate
-
-    std::vector<std::array<uint8_t, 6>> ip_flt;    // Filter this flows (srouce ip and destination port)
+    uint32_t raw_buffer;               // Size of buffer for raw int data
+    std::vector<std::array<uint8_t, 6>> ip_flt; // Filter this flows (srouce ip and destination port)
 } options_t;
 
 // Structure with telemetric information to export 
@@ -60,7 +58,7 @@ typedef struct {
    uint64_t    seqNum;              // Sequence number of the received frame
    uint64_t    delay;               // Difference between the dest. and orig. timestamp
    uint64_t    sink_jitter;         // Difference between the dest timestamp of current packet and the previous
-   uint64_t    reordering;              
+   int64_t     reordering;              
 } telemetric_hdr_t;
 
 // Flow metadata structure 
@@ -68,5 +66,10 @@ struct meta_data {
     uint64_t seq = 0;        // Current sequence number
     uint64_t prev_dstTs = 0; // Previous destination timestamp
 };
+
+/**
+ * Sleep in microseconds
+ */
+void delay_usecs(unsigned int us);
 
 #endif //_P4_INT_H_

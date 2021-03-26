@@ -1,9 +1,6 @@
 /**
  * @author Mario Kuka <kuka@cesnet.cz>
  *         Pavlina Patova <xpatov00@stud.fit.vutbr.cz>
- * @brief Header file of INT sink node
- * 
- * Copyright (c) 2015 - 2018 CESNET, z.s.p.o.
  */
 
 #include <stdint.h>
