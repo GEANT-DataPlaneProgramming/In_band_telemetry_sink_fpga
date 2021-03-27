@@ -26,12 +26,14 @@ parser parse_influx {
 }
 
 #define IP_PROTOCOLS_UDP 0x11
+#define IP_PROTOCOLS_TCP 0x06
 
 header ipv4_t ip;
 parser parse_ip {
     extract(ip);
     return select(ip.protocol) {
         IP_PROTOCOLS_UDP : parse_udp;
+        IP_PROTOCOLS_TCP : parse_tcp;
         default          : ingress;
     }
 }
@@ -39,6 +41,12 @@ parser parse_ip {
 header udp_t udp;
 parser parse_udp {
     extract(udp);
+    return parse_int_shim;
+}
+
+header tcp_t tcp;
+parser parse_tcp {
+    extract(tcp);
     return parse_int_shim;
 }
 

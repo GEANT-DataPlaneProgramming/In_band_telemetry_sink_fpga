@@ -15,8 +15,6 @@ action map_to_eth() {
 action fill_influx() {
     modify_field(influx.srcAddr, ip.srcAddr);
     modify_field(influx.dstAddr, ip.dstAddr);
-    modify_field(influx.ingress_port_id, udp.sprt);
-    modify_field(influx.egress_port_id, udp.dprt);
     modify_field(influx.ingress_tstamp, int_ingress_tstamp.ingress_tstamp);
     modify_field(influx.egress_tstamp, int_egress_tstamp.egress_tstamp); 
     modify_field(influx.ndk_tstamp, intrinsic_metadata.ingress_timestamp);
@@ -24,7 +22,6 @@ action fill_influx() {
 
     remove_header(ethernet);   
     remove_header(ip);   
-    remove_header(udp);   
     remove_header(int_shim);   
     remove_header(int_hdr);   
     remove_header(int_switch_id);   
@@ -33,8 +30,23 @@ action fill_influx() {
     remove_header(int_egress_tstamp);   
     remove_header(int_tail);   
 
-    add_header(influx); 
     truncate(64);
+}
+
+action remove_tcp() {
+    modify_field(influx.seq, tcp.seq);
+    modify_field(influx.ingress_port_id, tcp.sprt);
+    modify_field(influx.egress_port_id, tcp.dprt);
+    remove_header(tcp);   
+    add_header(influx); 
+}
+
+action remove_udp() {
+    modify_field(influx.seq, 0);
+    modify_field(influx.ingress_port_id, udp.sprt);
+    modify_field(influx.egress_port_id, udp.dprt);
+    remove_header(udp);   
+    add_header(influx); 
 }
 
 action pkt_drop() {
@@ -53,10 +65,28 @@ table table_eth_map {
     }
 }
 
+table table_tcp {
+    actions {
+        remove_tcp;
+    }
+}
+
+table table_udp {
+    actions {
+        remove_udp;
+    }
+}
+
+table table_drop {
+    actions {
+        pkt_drop;
+    }
+}
+
 table table_influx {
     reads {
-        ip.srcAddr : exact;			
-        udp.dprt   : exact;			
+        ip.srcAddr            : exact;			
+        influx.egress_port_id : exact;			
     }
     actions {
         fill_influx;
@@ -73,6 +103,14 @@ control ingress {
         // Data come from the DMA
         apply(table_eth_map);
     }
-    
-    apply(table_influx);
+
+    if(valid(tcp)) {
+        apply(table_tcp);
+        apply(table_influx);
+    } else if(valid(udp)) {
+        apply(table_udp);
+        apply(table_influx);
+    } else {
+        apply(table_drop);
+    } 
 }

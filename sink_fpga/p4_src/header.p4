@@ -24,6 +24,20 @@ header_type ipv4_t {
     }
 }
 
+header_type tcp_t {
+    fields {
+        sprt       : 16;
+        dprt       : 16;
+        seq        : 32;
+        ack        : 32;
+        dataOffset : 4;
+        flags      : 12;
+        window     : 16;
+        checksum   : 16;
+        urgentPtr  : 16;
+    }
+}
+
 header_type udp_t {
     fields {
         sprt        : 16;
@@ -102,7 +116,8 @@ header_type infux_t {
         egress_tstamp   : 64;
         ndk_tstamp      : 64;
         delay           : 64;
-        padding         : 160;        
+        seq             : 32;
+        padding         : 128;        
     }
 }
 
