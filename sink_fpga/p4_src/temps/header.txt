@@ -59,50 +59,28 @@ header_type intl4_shim_t {
 
 header_type int_hdr_t {
     fields {
-        ver         : 2;
-        rep         : 2;
-        c           : 1;
-        e           : 1;
-        rsvd1       : 5;
-        ins_cnt     : 5;
-        max_hops    : 8;
-        total_hops  : 8;
-        inst_mask   : 16;
-        rsvd2       : 16;
-    }
+        ver          : 4;
+        rep          : 2;
+        c            : 1;
+        e            : 1;
+        m            : 1;
+        rsvd1        : 7;
+        rsvd2        : 3;
+        hop_meta_len : 5;
+        rem_hop_cnt  : 8;
+        inst_mask    : 16;
+        rsvd3        : 16;
 }
 
-header_type int_switch_id_t {
+header_type int_meta_ids_t {
     fields {
-        switch_id : 32;
-    }
-}
-
-header_type int_port_ids_t {
-    fields {
-        ingress_port_id : 16;
-        egress_port_id  : 16;
-    }
-}
-
-header_type int_ingress_tstamp_t {
-    fields {
-        ingress_tstamp : 64;
-    }
-}
-
-header_type int_egress_tstamp_t {
-    fields {
-        egress_tstamp : 64;
-    }
-}
-
-header_type intl4_tail_t {
-    fields {
-        next_proto : 8;
-        dest_port  : 16;
-        padding    : 2;
-        dscp       : 6;
+        switch_id       : 32;
+        q_id            : 8;
+        q_cong          : 24;
+        ingress_tstamp  : 64;
+        egress_tstamp   : 64;
+        ingress_port_id : 32;
+        egress_port_id  : 32;
     }
 }
 
@@ -120,5 +98,3 @@ header_type infux_t {
         padding         : 128;        
     }
 }
-
-

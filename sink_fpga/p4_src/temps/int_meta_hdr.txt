@@ -1,0 +1,12 @@
+{% for i in range(0, n - 1) %}
+header int_meta_ids_t int_meta_ids_{{ i }};
+parser parse_int_meta_ids_{{ i }} {
+    extract(int_meta_ids_{{ i }});
+    return parse_int_meta_ids_{{ i + 1 }};
+} {% endfor %}
+
+header int_meta_ids_t int_meta_ids_{{ n - 1 }};
+parser parse_int_meta_ids_{{ n - 1}} {
+    extract(int_meta_ids_{{ n - 1}});
+    return ingress;
+}

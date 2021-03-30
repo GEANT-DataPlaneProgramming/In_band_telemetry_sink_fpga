@@ -41,7 +41,7 @@ parser parse_ip {
 header udp_t udp;
 parser parse_udp {
     extract(udp);
-    return parse_int_shim;
+    return parse_int_shim_0;
 }
 
 header tcp_t tcp;
@@ -59,37 +59,7 @@ parser parse_int_shim {
 header int_hdr_t int_hdr;
 parser parse_int_hdr {
     extract(int_hdr);
-    return parse_int_switch_id;
+    return parse_int_meta_ids_0;
 }
-
-header int_switch_id_t int_switch_id;
-parser parse_int_switch_id {
-    extract(int_switch_id);
-    return parse_int_port_ids;
-}
-
-header int_port_ids_t int_port_ids;
-parser parse_int_port_ids {
-    extract(int_port_ids);
-    return parse_int_ingress_tstamp;
-}
-
-header int_ingress_tstamp_t int_ingress_tstamp;
-parser parse_int_ingress_tstamp {
-    extract(int_ingress_tstamp);
-    return parse_int_egress_tstamp;
-}
-
-header int_egress_tstamp_t int_egress_tstamp;
-parser parse_int_egress_tstamp {
-    extract(int_egress_tstamp);
-    return parse_int_tail;
-}
-
-header intl4_tail_t int_tail;
-parser parse_int_tail {
-    extract(int_tail);
-    return ingress;
-}
-
+{{ meta }}
 
