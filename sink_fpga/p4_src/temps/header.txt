@@ -70,6 +70,7 @@ header_type int_hdr_t {
         rem_hop_cnt  : 8;
         inst_mask    : 16;
         rsvd3        : 16;
+    }
 }
 
 header_type int_meta_ids_t {

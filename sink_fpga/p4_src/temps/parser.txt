@@ -41,7 +41,7 @@ parser parse_ip {
 header udp_t udp;
 parser parse_udp {
     extract(udp);
-    return parse_int_shim_0;
+    return parse_int_shim;
 }
 
 header tcp_t tcp;
