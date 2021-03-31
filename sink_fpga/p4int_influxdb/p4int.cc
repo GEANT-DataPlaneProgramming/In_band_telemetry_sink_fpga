@@ -138,18 +138,10 @@ void print_telemetric(const telemetric_hdr_t *hdr) {
 uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const options_t& opt) {
     // Prepare telemetric data into the apropriate structure
     telemetric_hdr_t tmpHdr;
+    uint8_t inflix_hdr_len = 36;
+    uint8_t node_hdr_len = 32;
 
-    // Convert source timestamp
-    tmpHdr.origTs = ntoh64(*((uint64_t*) (pkt.data+12)));
-    // Convert destination timestamp
-    tmpHdr.dstTs = ntohl((*(uint32_t*)(pkt.data +32))) ;
-    tmpHdr.dstTs += ntohl((*((uint32_t*)(pkt.data+28)))) *  1000000000ll; 
-    // Cut of timestamps to 48 bits
-    if(opt.tstmp == 1) {
-        uint64_t mask = 0x0000FFFFFFFFFFFF;
-        tmpHdr.origTs = tmpHdr.origTs & mask;
-        tmpHdr.dstTs = tmpHdr.dstTs & mask;
-    }
+    // Get info from influx header
 
     // Convert IP addresses 
     inet_ntop(AF_INET, pkt.data, tmpHdr.srcIp, IP_BUFF_SIZE);
@@ -159,6 +151,29 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     tmpHdr.srcPort =  ntohs(*((uint16_t*) (pkt.data + 8)));
     tmpHdr.dstPort =  ntohs(*((uint16_t*) (pkt.data + 10)));
 
+    uint8_t meta_len = (*((uint8_t*) (pkt.data + 12))); 
+    uint8_t magic_const = 3;
+
+    uint8_t node_cnt = (meta_len - magic_const)/8;
+    printf("Number of nodes: %hu'\n", node_cnt);
+    
+    // +13 = rscd1 (3B)
+  
+    // Convert destination timestamp
+    tmpHdr.dstTs = ntohl((*(uint32_t*)(pkt.data +20))) ;
+    tmpHdr.dstTs += ntohl((*((uint32_t*)(pkt.data+16)))) *  1000000000ll; 
+
+    // Convert source timestamp
+    tmpHdr.origTs = ntoh64(*((uint64_t*) (pkt.data + inflix_hdr_len + 8)));
+
+    // Cut of timestamps to 48 bits
+    if(opt.tstmp == 1) {
+        uint64_t mask = 0x0000FFFFFFFFFFFF;
+        tmpHdr.origTs = tmpHdr.origTs & mask;
+        tmpHdr.dstTs = tmpHdr.dstTs & mask;
+    }
+
+ 
     // Get flow data
     // TODO: Implement flow hash table 
     uint64_t map_key = *((uint64_t*)(pkt.data));
@@ -166,7 +181,7 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
    
     // Calculate int header
     tmpHdr.delay = tmpHdr.dstTs - tmpHdr.origTs;
-    tmpHdr.seqNum = ntohl((*(uint32_t*)(pkt.data + 44))); 
+    tmpHdr.seqNum = ntohl((*(uint32_t*)(pkt.data + 32))); 
     tmpHdr.sink_jitter = tmpHdr.dstTs - meta_tmp.prev_dstTs;
     
     if(meta_tmp.seq == 0) {
@@ -174,24 +189,26 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     } else {
         tmpHdr.reordering = tmpHdr.seqNum - meta_tmp.seq - 1; 
     } 
+
+    
     
     // Update flow data
     meta_tmp.prev_dstTs = tmpHdr.dstTs;
     meta_tmp.seq = tmpHdr.seqNum;
-
-    // Report to influxdb
-    if(opt.hostValid && (pkt_cnt % opt.smpl_rate == 0)) {
-        uint32_t ret = exporter.sendData(tmpHdr);
-        if(ret != EXIT_SUCCESS) {
-            //printf("Error during the export to InfluxDB\n");
-            //return RET_ERR;
-            pkt_drop++;
-            if(pkt_drop % 1000 == 0 && pkt_drop != 0) {
-                std::cout << "dopped: " << pkt_drop << std::endl;
-            }
-        }
-    }  
-      
+//
+//    // Report to influxdb
+//    if(opt.hostValid && (pkt_cnt % opt.smpl_rate == 0)) {
+//        uint32_t ret = exporter.sendData(tmpHdr);
+//        if(ret != EXIT_SUCCESS) {
+//            //printf("Error during the export to InfluxDB\n");
+//            //return RET_ERR;
+//            pkt_drop++;
+//            if(pkt_drop % 1000 == 0 && pkt_drop != 0) {
+//                std::cout << "dopped: " << pkt_drop << std::endl;
+//            }
+//        }
+//    }  
+//      
     // Print to console
     if(opt.verbose) {
         print_telemetric(&tmpHdr);
@@ -451,7 +468,6 @@ int32_t main(int32_t argc, char** argv) {
   
     // Prepare exporter 
     IntExporter exporter(&opt);
-    
     // infinite loop packet processing
     ret = loop_proccess(device, nfb, exporter, opt);
     
