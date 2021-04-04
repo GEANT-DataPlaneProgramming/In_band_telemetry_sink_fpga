@@ -15,22 +15,14 @@ action map_to_eth() {
 action fill_influx() {
     modify_field(influx.srcAddr, ip.srcAddr);
     modify_field(influx.dstAddr, ip.dstAddr);
-    modify_field(influx.ingress_tstamp, int_ingress_tstamp.ingress_tstamp);
-    modify_field(influx.egress_tstamp, int_egress_tstamp.egress_tstamp); 
     modify_field(influx.ndk_tstamp, intrinsic_metadata.ingress_timestamp);
     modify_field(influx.delay, intrinsic_metadata.ingress_timestamp);
+    modify_field(influx.meta_len, int_shim.len);
 
     remove_header(ethernet);   
     remove_header(ip);   
     remove_header(int_shim);   
     remove_header(int_hdr);   
-    remove_header(int_switch_id);   
-    remove_header(int_port_ids);   
-    remove_header(int_ingress_tstamp);   
-    remove_header(int_egress_tstamp);   
-    remove_header(int_tail);   
-
-    truncate(64);
 }
 
 action remove_tcp() {
@@ -106,11 +98,11 @@ control ingress {
 
     if(valid(tcp)) {
         apply(table_tcp);
-        apply(table_influx);
     } else if(valid(udp)) {
         apply(table_udp);
-        apply(table_influx);
     } else {
         apply(table_drop);
     } 
+    
+    apply(table_influx);
 }
