@@ -163,20 +163,6 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     //uint8_t magic_const = 3;
     //uint8_t node_cnt = (meta_len - magic_const)/6;
   
-    // Convert destination timestamp
-    tmpHdr.dstTs = ntohl((*(uint32_t*)(pkt.data +20))) ;
-    tmpHdr.dstTs += ntohl((*((uint32_t*)(pkt.data+16)))) *  1000000000ll; 
-
-    // Convert source timestamp
-    tmpHdr.origTs = ntoh64(*((uint64_t*) (pkt.data + inflix_hdr_len + 8)));
-
-    // Cut of timestamps to 48 bits
-    if(opt.tstmp == 1) {
-        uint64_t mask = 0x0000FFFFFFFFFFFF;
-        tmpHdr.origTs = tmpHdr.origTs & mask;
-        tmpHdr.dstTs = tmpHdr.dstTs & mask;
-    }
-
  
     // Get flow data
     // TODO: Implement flow hash table 
