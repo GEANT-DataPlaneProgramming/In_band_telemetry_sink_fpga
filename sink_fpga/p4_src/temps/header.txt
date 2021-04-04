@@ -57,6 +57,12 @@ header_type intl4_shim_t {
     }
 }
 
+header_type header_meta_t {
+    fields {
+        len      : 8;
+    }
+}
+
 header_type int_hdr_t {
     fields {
         ver          : 4;
@@ -76,12 +82,12 @@ header_type int_hdr_t {
 header_type int_meta_ids_t {
     fields {
         switch_id       : 32;
-        q_id            : 8;
-        q_cong          : 24;
+    //    q_id            : 8;
+    //    q_cong          : 24;
+        ingress_port_id : 16;
+        egress_port_id  : 16;
         ingress_tstamp  : 64;
         egress_tstamp   : 64;
-        ingress_port_id : 32;
-        egress_port_id  : 32;
     }
 }
 
@@ -91,11 +97,10 @@ header_type infux_t {
         dstAddr         : 32;
         ingress_port_id : 16;
         egress_port_id  : 16;
-        ingress_tstamp  : 64;
-        egress_tstamp   : 64;
+        meta_len        : 8;
+        rsvd1           : 24; 
         ndk_tstamp      : 64;
         delay           : 64;
         seq             : 32;
-        padding         : 128;        
     }
 }
