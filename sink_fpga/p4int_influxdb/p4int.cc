@@ -140,10 +140,10 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     telemetric_hdr_t tmpHdr;
 
     // Convert source timestamp
-    tmpHdr.origTs = ntoh64(*((uint64_t*) (pkt.data+12)));
+    tmpHdr.origTs = ntoh64(*((uint64_t*)(pkt.data+44)));
     // Convert destination timestamp
-    tmpHdr.dstTs = ntohl((*(uint32_t*)(pkt.data +32))) ;
-    tmpHdr.dstTs += ntohl((*((uint32_t*)(pkt.data+28)))) *  1000000000ll; 
+    tmpHdr.dstTs = ntohl((*(uint32_t*)(pkt.data+20))) ;
+    tmpHdr.dstTs += ntohl((*((uint32_t*)(pkt.data+16)))) *  1000000000ll; 
     // Cut of timestamps to 48 bits
     if(opt.tstmp == 1) {
         uint64_t mask = 0x0000FFFFFFFFFFFF;
@@ -166,7 +166,7 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
    
     // Calculate int header
     tmpHdr.delay = tmpHdr.dstTs - tmpHdr.origTs;
-    tmpHdr.seqNum = ntohl((*(uint32_t*)(pkt.data + 44))); 
+    tmpHdr.seqNum = ntohl((*(uint32_t*)(pkt.data + 32))); 
     tmpHdr.sink_jitter = tmpHdr.dstTs - meta_tmp.prev_dstTs;
     
     if(meta_tmp.seq == 0) {
