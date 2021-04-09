@@ -139,8 +139,7 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     telemetric_hdr_t tmpHdr;
     struct int_influx_t *int_hdr = (struct int_influx_t*)pkt.data;
     struct int_influx_t *tmp = int_hdr;
-    struct int_meta_t *int_meta_hdr = (struct int_meta_t *)(pkt.data +36);
-
+    struct int_meta_t *int_meta_hdr = (struct int_meta_t *)(++tmp);
 
     // Convert source timestamp
     tmpHdr.origTs = ntoh64(((int_meta_hdr->ingress_tstamp)));

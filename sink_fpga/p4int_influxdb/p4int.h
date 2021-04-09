@@ -78,7 +78,7 @@ struct int_influx_t{
     uint32_t  ndk_tstamp2;
     uint64_t  delay;
     uint32_t  seq;
-};  
+}__attribute__((packed));  
 
 struct int_meta_t{
     uint32_t switch_id;
@@ -86,7 +86,7 @@ struct int_meta_t{
     uint16_t egress_port_id;
     uint64_t ingress_tstamp;
     uint64_t egress_tstamp;
-};
+}__attribute__((packed));
 
 
 /**
