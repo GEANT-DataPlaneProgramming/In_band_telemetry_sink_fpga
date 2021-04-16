@@ -32,7 +32,6 @@ uint64_t pkt_cnt = 0;
  */
 uint64_t pkt_drop = 0;
 
-
 /**
  * Helping control variable
  */
@@ -138,12 +137,17 @@ void print_telemetric(const telemetric_hdr_t *hdr) {
 uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const options_t& opt) {
     // Prepare telemetric data into the apropriate structure
     telemetric_hdr_t tmpHdr;
+    struct int_influx_t *int_hdr = (struct int_influx_t*)pkt.data;
+    struct int_influx_t *tmp = int_hdr;
+    struct int_meta_t *int_meta_hdr = (struct int_meta_t *)(++tmp);
 
     // Convert source timestamp
-    tmpHdr.origTs = ntoh64(*((uint64_t*) (pkt.data+12)));
+    tmpHdr.origTs = ntoh64(((int_meta_hdr->ingress_tstamp)));
+
     // Convert destination timestamp
-    tmpHdr.dstTs = ntohl((*(uint32_t*)(pkt.data +32))) ;
-    tmpHdr.dstTs += ntohl((*((uint32_t*)(pkt.data+28)))) *  1000000000ll; 
+    tmpHdr.dstTs = ntohl(((int_hdr->ndk_tstamp2)));
+    tmpHdr.dstTs += ntohl(((int_hdr->ndk_tstamp1)))*  1'000'000'000ll;
+
     // Cut of timestamps to 48 bits
     if(opt.tstmp == 1) {
         uint64_t mask = 0x0000FFFFFFFFFFFF;
@@ -152,12 +156,14 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     }
 
     // Convert IP addresses 
-    inet_ntop(AF_INET, pkt.data, tmpHdr.srcIp, IP_BUFF_SIZE);
-    inet_ntop(AF_INET, pkt.data + 4, tmpHdr.dstIp, IP_BUFF_SIZE);
+    inet_ntop(AF_INET, &int_hdr->srcAddr, tmpHdr.srcIp, IP_BUFF_SIZE);
+    inet_ntop(AF_INET, &int_hdr->dstAddr, tmpHdr.dstIp, IP_BUFF_SIZE);
 
     // Convert source and destination ports
-    tmpHdr.srcPort =  ntohs(*((uint16_t*) (pkt.data + 8)));
-    tmpHdr.dstPort =  ntohs(*((uint16_t*) (pkt.data + 10)));
+    tmpHdr.srcPort =  ntohs(((int_hdr->ingress_port_id)));
+    tmpHdr.dstPort =  ntohs(((int_hdr->egress_port_id)));
+
+    uint8_t meta_len = (((int_hdr->meta_len))); 
 
     // Get flow data
     // TODO: Implement flow hash table 
@@ -166,7 +172,7 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
    
     // Calculate int header
     tmpHdr.delay = tmpHdr.dstTs - tmpHdr.origTs;
-    tmpHdr.seqNum = ntohl((*(uint32_t*)(pkt.data + 44))); 
+    tmpHdr.seqNum = ntohl(((int_hdr->seq))); 
     tmpHdr.sink_jitter = tmpHdr.dstTs - meta_tmp.prev_dstTs;
     
     if(meta_tmp.seq == 0) {
@@ -451,7 +457,6 @@ int32_t main(int32_t argc, char** argv) {
   
     // Prepare exporter 
     IntExporter exporter(&opt);
-    
     // infinite loop packet processing
     ret = loop_proccess(device, nfb, exporter, opt);
     

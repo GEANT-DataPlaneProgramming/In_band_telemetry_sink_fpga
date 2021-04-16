@@ -50,46 +50,34 @@ parser parse_tcp {
     return parse_int_shim;
 }
 
+metadata header_meta_t int_meta;
 header intl4_shim_t int_shim;
 parser parse_int_shim {
     extract(int_shim);
+    set_metadata(int_meta.len, int_shim.len);
     return parse_int_hdr;
 }
 
 header int_hdr_t int_hdr;
 parser parse_int_hdr {
     extract(int_hdr);
-    return parse_int_switch_id;
+    return select(int_meta.len) {
+        {% for i in range(0, n) %} 
+        {{ ((i + 1) * 6) + 3 }} : parse_int_meta_ids_{{ n - 1 - i }};{% endfor %}
+        default : ingress;
+    }
 }
 
-header int_switch_id_t int_switch_id;
-parser parse_int_switch_id {
-    extract(int_switch_id);
-    return parse_int_port_ids;
-}
+{% for i in range(0, n - 1) %}
+header int_meta_ids_t int_meta_ids_{{ i }};
+parser parse_int_meta_ids_{{ i }} {
+    extract(int_meta_ids_{{ i }});
+    return parse_int_meta_ids_{{ i + 1 }};
+} {% endfor %}
 
-header int_port_ids_t int_port_ids;
-parser parse_int_port_ids {
-    extract(int_port_ids);
-    return parse_int_ingress_tstamp;
-}
-
-header int_ingress_tstamp_t int_ingress_tstamp;
-parser parse_int_ingress_tstamp {
-    extract(int_ingress_tstamp);
-    return parse_int_egress_tstamp;
-}
-
-header int_egress_tstamp_t int_egress_tstamp;
-parser parse_int_egress_tstamp {
-    extract(int_egress_tstamp);
-    return parse_int_tail;
-}
-
-header intl4_tail_t int_tail;
-parser parse_int_tail {
-    extract(int_tail);
+header int_meta_ids_t int_meta_ids_{{ n - 1 }};
+parser parse_int_meta_ids_{{ n - 1 }} {
+    extract(int_meta_ids_{{ n - 1 }});
     return ingress;
 }
-
 
