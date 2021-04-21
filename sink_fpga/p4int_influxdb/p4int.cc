@@ -30,6 +30,8 @@ struct int_influx_t{
       uint8_t   meta_len;
       uint8_t   hop_meta_len;
       uint8_t   rsvd1[2];
+     // std::bitset<5>   hop_meta_len;
+      //std::bitset<19>   rsvd1;
       uint32_t  ndk_tstamp1;
       uint32_t  ndk_tstamp2;
       uint64_t  delay;
@@ -167,7 +169,7 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     struct int_influx_t *int_hdr = (struct int_influx_t*)pkt.data;
     struct int_influx_t *tmp = int_hdr;
     struct int_meta_t *int_meta_hdr = (struct int_meta_t *)(++tmp);
-
+    
     // Convert source timestamp
     tmpHdr.origTs = ntoh64(((int_meta_hdr->ingress_tstamp)));
 
@@ -193,9 +195,7 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     // Nodes proccessing
     uint64_t tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
     
-    //printf("LEN: %u HOP: %u\n",int_hdr->meta_len, int_hdr->hop_meta_len);
-    //uint8_t meta_cnt = int_hdr->meta_len/int_hdr->hop_meta_len;
-    uint8_t meta_cnt = 2;
+    uint8_t meta_cnt = int_hdr->meta_len/int_hdr->hop_meta_len;
  
     for(uint8_t i = 0; i < meta_cnt; ++i) {
         struct telemetric_meta node;
