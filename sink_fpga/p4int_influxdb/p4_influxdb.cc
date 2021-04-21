@@ -68,7 +68,7 @@ static void http_sender(ringbuffer<telemetric_hdr_t, RING_BUFFER_SIZE> *ring, co
                 telemetric.seqNum, telemetric.delay, telemetric.sink_jitter, telemetric.reordering, telemetric.dstTs);
             data.append(report);
             it++;
-            
+
             int cnt = 0;
             for(auto & item: telemetric.node_meta) {
                 if(cnt == 0) {

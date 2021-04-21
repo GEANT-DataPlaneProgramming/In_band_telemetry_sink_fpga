@@ -194,8 +194,8 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
 
     // Nodes proccessing
     uint64_t tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
-    
-    uint8_t meta_cnt = int_hdr->meta_len/int_hdr->hop_meta_len;
+    uint8_t meta_cnt = int_hdr->meta_len/(int_hdr->hop_meta_len>>3);
+
  
     for(uint8_t i = 0; i < meta_cnt; ++i) {
         struct telemetric_meta node;
@@ -209,7 +209,8 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
         }
 
         node.hop_jitter = ntoh64(int_meta_hdr->ingress_tstamp) - prev_timestamps[i];
-       
+        prev_timestamps[i] = ntoh64(int_meta_hdr->ingress_tstamp);
+
         tmpHdr.node_meta.push_back(node); 
         ++int_meta_hdr;
     }
