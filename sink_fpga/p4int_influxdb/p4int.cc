@@ -172,13 +172,14 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
    
     // Calculate int header
     tmpHdr.delay = tmpHdr.dstTs - tmpHdr.origTs;
-    tmpHdr.seqNum = ntohl(((int_hdr->seq))); 
     tmpHdr.sink_jitter = tmpHdr.dstTs - meta_tmp.prev_dstTs;
     
     if(meta_tmp.seq == 0) {
-        tmpHdr.reordering = 0; 
+        tmpHdr.reordering = 0;
+        tmpHdr.seqNum = meta_tmp.seq + 1; 
     } else {
         tmpHdr.reordering = tmpHdr.seqNum - meta_tmp.seq - 1; 
+        tmpHdr.seqNum = ntohl(((int_hdr->seq))); 
     } 
     
     // Update flow data
