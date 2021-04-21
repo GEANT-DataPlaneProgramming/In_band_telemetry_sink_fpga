@@ -28,7 +28,8 @@ struct int_influx_t{
       uint16_t  ingress_port_id;
       uint16_t  egress_port_id;
       uint8_t   meta_len;
-      uint8_t   rsvd1[3];
+      uint8_t   hop_meta_len;
+      uint8_t   rsvd1[2];
       uint32_t  ndk_tstamp1;
       uint32_t  ndk_tstamp2;
       uint64_t  delay;
@@ -45,6 +46,8 @@ struct int_influx_t{
 
 #define TCP 6
 #define UDP 17
+#define MAX_NODES 10
+uint64_t prev_timestamps[MAX_NODES];
 
 /**
  * Packet counter
@@ -187,7 +190,29 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     tmpHdr.srcPort =  ntohs(((int_hdr->ingress_port_id)));
     tmpHdr.dstPort =  ntohs(((int_hdr->egress_port_id)));
 
-    uint8_t meta_len = (((int_hdr->meta_len))); 
+    // Nodes proccessing
+    uint64_t tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
+    
+    //printf("LEN: %u HOP: %u\n",int_hdr->meta_len, int_hdr->hop_meta_len);
+    //uint8_t meta_cnt = int_hdr->meta_len/int_hdr->hop_meta_len;
+    uint8_t meta_cnt = 2;
+ 
+    for(uint8_t i = 0; i < meta_cnt; ++i) {
+        struct telemetric_meta node;
+        node.hop_index = i;
+        node.hop_delay = ntoh64(int_meta_hdr->egress_tstamp) - ntoh64(int_meta_hdr->ingress_tstamp);
+        node.link_delay = 0;
+        if(i != 0)
+        {
+            node.link_delay = tmp_eg_timestamp -  ntoh64(int_meta_hdr->ingress_tstamp);
+            tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
+        }
+
+        node.hop_jitter = ntoh64(int_meta_hdr->ingress_tstamp) - prev_timestamps[i];
+       
+        tmpHdr.node_meta.push_back(node); 
+        ++int_meta_hdr;
+    }
 
     // Get flow data
     // TODO: Implement flow hash table 
@@ -211,8 +236,7 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     // Update flow data
     meta_tmp.prev_dstTs = tmpHdr.dstTs;
     meta_tmp.seq = tmpHdr.seqNum;
-std::cout<< "TMP: "<<tmpHdr.seqNum << "Meta: "<<meta_tmp.seq <<"Proto: " << tmpHdr.protocol << std::endl;
-printf("TMP: %lu Meta: %lu Proto: %u \n", tmpHdr.seqNum, meta_tmp.seq, tmpHdr.protocol);
+
     // Report to influxdb
     if(opt.hostValid && (pkt_cnt % opt.smpl_rate == 0)) {
         uint32_t ret = exporter.sendData(tmpHdr);

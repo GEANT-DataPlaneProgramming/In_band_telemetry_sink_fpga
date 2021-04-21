@@ -56,14 +56,31 @@ static void http_sender(ringbuffer<telemetric_hdr_t, RING_BUFFER_SIZE> *ring, co
         // Prepare http datagram and send it
         if(opt->hostValid) {
             sprintf(report,
-                "int_telemetry,srcip=%s,dstip=%s,srcp=%u,dstp=%u origts=%lu,dstts=%lu,seq=%lu,delay=%lu,sink_jitter=%lu,reordering=%ld %lu\n",
-                telemetric.srcIp, telemetric.dstIp, telemetric.srcPort, telemetric.dstPort, telemetric.origTs, telemetric.dstTs,
+                "int_telemetry,srcip=%s,dstip=%s,srcp=%u,dstp=%u,protocol=%u,origts=%lu,dstts=%lu,seq=%lu,delay=%lu,sink_jitter=%lu,reordering=%ld %lu\n",
+                telemetric.srcIp, telemetric.dstIp, telemetric.srcPort, telemetric.dstPort, telemetric.protocol, telemetric.origTs, telemetric.dstTs,
                 telemetric.seqNum, telemetric.delay, telemetric.sink_jitter, telemetric.reordering, telemetric.dstTs);
             data.append(report);
             it++;
             
+            int cnt = 0;
+            for(auto & item: telemetric.node_meta) {
+                if(cnt == 0) {
+                    sprintf(report,
+                        "int_telemetry,srcip=%s,dstip=%s,srcp=%u,dstp=%u,protocol=%u,hop_index=%u,hop_delay=%lu %lu\n",
+                        telemetric.srcIp, telemetric.dstIp, telemetric.srcPort, telemetric.dstPort, telemetric.protocol, item.hop_index, item.hop_delay, telemetric.dstTs);
+                 }
+                 else {
+                    sprintf(report,
+                        "int_telemetry,srcip=%s,dstip=%s,srcp=%u,dstp=%u,protocol=%u,hop_index=%u,hop_delay=%lu,link_delay=%lu %lu\n",
+                        telemetric.srcIp, telemetric.dstIp, telemetric.srcPort, telemetric.dstPort, telemetric.protocol, item.hop_index, item.hop_delay, item.link_delay, telemetric.dstTs);
+                 }
+                 data.append(report);
+                 it++;
+                 cnt++;
+           }
+ 
             // Chekc Batch threshold
-            if(it == opt->batch) {
+            if(it >= opt->batch) {
                 try {
                     http_sock.send(data);
                 } catch (std::runtime_error& e) {

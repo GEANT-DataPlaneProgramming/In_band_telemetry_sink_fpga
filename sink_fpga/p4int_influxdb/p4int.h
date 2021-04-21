@@ -47,6 +47,13 @@ typedef struct {
     std::vector<std::array<uint8_t, 6>> ip_flt; // Filter this flows (srouce ip and destination port)
 } options_t;
 
+struct telemetric_meta {
+    uint64_t link_delay;
+    uint64_t hop_delay;
+    uint64_t hop_jitter;
+    uint8_t  hop_index;
+};
+
 // Structure with telemetric information to export 
 typedef struct {
    char        srcIp[IP_BUFF_SIZE]; // String - source IPv4 address
@@ -55,10 +62,12 @@ typedef struct {
    uint16_t    dstPort;             // Value - destination port
    uint64_t    origTs;              // Value - orig. timestamp (UNIX NS format)
    uint64_t    dstTs;               // Value - dest. timestamp (UNIX NS format)
+   uint8_t     protocol;
    uint64_t    seqNum;              // Sequence number of the received frame
    uint64_t    delay;               // Difference between the dest. and orig. timestamp
    uint64_t    sink_jitter;         // Difference between the dest timestamp of current packet and the previous
-   int64_t     reordering;              
+   int64_t     reordering;
+   std::vector<telemetric_meta> node_meta;              
 } telemetric_hdr_t;
 
 // Flow metadata structure 
