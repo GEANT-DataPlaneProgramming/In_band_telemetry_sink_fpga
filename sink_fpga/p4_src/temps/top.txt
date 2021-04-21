@@ -17,6 +17,9 @@ action fill_influx() {
     modify_field(influx.dstAddr, ip.dstAddr);
     modify_field(influx.ndk_tstamp, intrinsic_metadata.ingress_timestamp);
     modify_field(influx.delay, intrinsic_metadata.ingress_timestamp);
+    modify_field(influx.hop_meta_len, int_hdr.hop_meta_len);
+    
+    subtract_from_field(influx.meta_len, 3);
     modify_field(influx.meta_len, int_shim.len);
 
     remove_header(ethernet);   
