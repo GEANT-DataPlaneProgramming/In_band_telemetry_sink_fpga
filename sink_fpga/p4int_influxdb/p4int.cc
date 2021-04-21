@@ -22,6 +22,27 @@
 #include "p4int.h"
 #include "p4_influxdb.h"
 
+struct int_influx_t{
+      uint32_t  srcAddr;
+      uint32_t  dstAddr;
+      uint16_t  ingress_port_id;
+      uint16_t  egress_port_id;
+      uint8_t   meta_len;
+      uint8_t   rsvd1[3];
+      uint32_t  ndk_tstamp1;
+      uint32_t  ndk_tstamp2;
+      uint64_t  delay;
+      uint32_t  seq;
+}__attribute__((packed));
+ 
+  struct int_meta_t{
+      uint32_t switch_id;
+      uint16_t ingress_port_id;
+      uint16_t egress_port_id;
+      uint64_t ingress_tstamp;
+      uint64_t egress_tstamp;
+}__attribute__((packed));
+
 /**
  * Packet counter
  */
