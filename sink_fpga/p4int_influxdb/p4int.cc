@@ -43,6 +43,9 @@ struct int_influx_t{
       uint64_t egress_tstamp;
 }__attribute__((packed));
 
+#define TCP 6
+#define UDP 17
+
 /**
  * Packet counter
  */
@@ -193,20 +196,23 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
    
     // Calculate int header
     tmpHdr.delay = tmpHdr.dstTs - tmpHdr.origTs;
+    tmpHdr.seqNum = ntohl(((int_hdr->seq))); 
     tmpHdr.sink_jitter = tmpHdr.dstTs - meta_tmp.prev_dstTs;
     
-    if(meta_tmp.seq == 0) {
+    if(tmpHdr.seqNum == 0) {
         tmpHdr.reordering = 0;
         tmpHdr.seqNum = meta_tmp.seq + 1; 
+        tmpHdr.protocol = UDP;
     } else {
         tmpHdr.reordering = tmpHdr.seqNum - meta_tmp.seq - 1; 
-        tmpHdr.seqNum = ntohl(((int_hdr->seq))); 
+        tmpHdr.protocol = TCP;
     } 
     
     // Update flow data
     meta_tmp.prev_dstTs = tmpHdr.dstTs;
     meta_tmp.seq = tmpHdr.seqNum;
-
+std::cout<< "TMP: "<<tmpHdr.seqNum << "Meta: "<<meta_tmp.seq <<"Proto: " << tmpHdr.protocol << std::endl;
+printf("TMP: %lu Meta: %lu Proto: %u \n", tmpHdr.seqNum, meta_tmp.seq, tmpHdr.protocol);
     // Report to influxdb
     if(opt.hostValid && (pkt_cnt % opt.smpl_rate == 0)) {
         uint32_t ret = exporter.sendData(tmpHdr);
