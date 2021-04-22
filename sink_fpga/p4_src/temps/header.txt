@@ -98,8 +98,8 @@ header_type infux_t {
         ingress_port_id : 16;
         egress_port_id  : 16;
         meta_len        : 8;
-        hop_meta_len    : 5;
-        rsvd1           : 19; 
+        hop_meta_len    : 8;
+        rsvd1           : 16; 
         ndk_tstamp      : 64;
         delay           : 64;
         seq             : 32;
