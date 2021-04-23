@@ -110,7 +110,6 @@ static void http_sender(ringbuffer<telemetric_hdr_t, RING_BUFFER_SIZE> *ring, co
  
             // Check Batch threshold
             if(it >= opt->batch) {
-                std::cout << data << std::endl;
                 try {
                     http_sock.send(data);
                 } catch (std::runtime_error& e) {
