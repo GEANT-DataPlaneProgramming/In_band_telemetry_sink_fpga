@@ -194,7 +194,7 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
 
     // Nodes proccessing
     uint64_t tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
-    uint8_t meta_cnt = int_hdr->meta_len/(int_hdr->hop_meta_len>>3);
+    uint8_t meta_cnt = int_hdr->meta_len/(int_hdr->hop_meta_len);
 
  
     for(uint8_t i = 0; i < meta_cnt; ++i) {
