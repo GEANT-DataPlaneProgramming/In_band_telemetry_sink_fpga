@@ -22,6 +22,9 @@
 #include "p4int.h"
 #include "p4_influxdb.h"
 
+/**
+ * Structures for handling packet data nicier
+ */
 struct int_influx_t{
       uint32_t  srcAddr;
       uint32_t  dstAddr;
@@ -30,8 +33,6 @@ struct int_influx_t{
       uint8_t   meta_len;
       uint8_t   hop_meta_len;
       uint8_t   rsvd1[2];
-     // std::bitset<5>   hop_meta_len;
-      //std::bitset<19>   rsvd1;
       uint32_t  ndk_tstamp1;
       uint32_t  ndk_tstamp2;
       uint64_t  delay;
@@ -46,8 +47,12 @@ struct int_influx_t{
       uint64_t egress_tstamp;
 }__attribute__((packed));
 
-#define TCP 6
+#define TCP  6
 #define UDP 17
+
+/**
+ * Auxiliary variables for node jitter
+ */
 #define MAX_NODES 10
 uint64_t prev_timestamps[MAX_NODES];
 
@@ -157,32 +162,16 @@ void print_telemetric(const telemetric_hdr_t *hdr) {
 }
 
 /**
- * Process one received packet based on the program
- * \param pkt Input packet to prs
- * \param influxdb Database descriptor
+ * Write headre information to format sutable for sending
+ * \param tmpHdr Where to store parsed information
+ * \param int_hdr Raw data from packet
  * \param opt Program parameters
- * \return RET_OK if everything was fine
+ * \param map_key Map key
  */
-uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const options_t& opt) {
-    // Prepare telemetric data into the apropriate structure
-    telemetric_hdr_t tmpHdr;
-    struct int_influx_t *int_hdr = (struct int_influx_t*)pkt.data;
-    struct int_influx_t *tmp = int_hdr;
-    struct int_meta_t *int_meta_hdr = (struct int_meta_t *)(++tmp);
-    
-    // Convert source timestamp
-    tmpHdr.origTs = ntoh64(((int_meta_hdr->ingress_tstamp)));
-
+void get_int_header_data(telemetric_hdr_t &tmpHdr, struct int_influx_t *int_hdr, uint64_t map_key) {
     // Convert destination timestamp
     tmpHdr.dstTs = ntohl(((int_hdr->ndk_tstamp2)));
     tmpHdr.dstTs += ntohl(((int_hdr->ndk_tstamp1)))*  1'000'000'000ll;
-
-    // Cut of timestamps to 48 bits
-    if(opt.tstmp == 1) {
-        uint64_t mask = 0x0000FFFFFFFFFFFF;
-        tmpHdr.origTs = tmpHdr.origTs & mask;
-        tmpHdr.dstTs = tmpHdr.dstTs & mask;
-    }
 
     // Convert IP addresses 
     inet_ntop(AF_INET, &int_hdr->srcAddr, tmpHdr.srcIp, IP_BUFF_SIZE);
@@ -192,34 +181,10 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     tmpHdr.srcPort =  ntohs(((int_hdr->ingress_port_id)));
     tmpHdr.dstPort =  ntohs(((int_hdr->egress_port_id)));
 
-    // Nodes proccessing
-    uint64_t tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
-    uint8_t meta_cnt = int_hdr->meta_len/(int_hdr->hop_meta_len);
-
- 
-    for(uint8_t i = 0; i < meta_cnt; ++i) {
-        struct telemetric_meta node;
-        node.hop_index = i;
-        node.hop_delay = ntoh64(int_meta_hdr->egress_tstamp) - ntoh64(int_meta_hdr->ingress_tstamp);
-        node.link_delay = 0;
-        if(i != 0)
-        {
-            node.link_delay = tmp_eg_timestamp -  ntoh64(int_meta_hdr->ingress_tstamp);
-            tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
-        }
-
-        node.hop_jitter = ntoh64(int_meta_hdr->ingress_tstamp) - prev_timestamps[i];
-        prev_timestamps[i] = ntoh64(int_meta_hdr->ingress_tstamp);
-
-        tmpHdr.node_meta.push_back(node); 
-        ++int_meta_hdr;
-    }
-
     // Get flow data
-    // TODO: Implement flow hash table 
-    uint64_t map_key = *((uint64_t*)(pkt.data));
+    // TODO: Implement flow hash table   
     meta_data &meta_tmp = flow_map[map_key];
-   
+
     // Calculate int header
     tmpHdr.delay = tmpHdr.dstTs - tmpHdr.origTs;
     tmpHdr.seqNum = ntohl(((int_hdr->seq))); 
@@ -237,8 +202,49 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
     // Update flow data
     meta_tmp.prev_dstTs = tmpHdr.dstTs;
     meta_tmp.seq = tmpHdr.seqNum;
+}
 
-    // Report to influxdb
+/**
+ * Write node information to format sutable for sending
+ * \param tmpHdr Where to store parsed information
+ * \param int_meta_hdr Raw data from packet
+ * \param meta_cnt Number of nodes to proccess
+ */
+void get_int_node_data(telemetric_hdr_t &tmpHdr, struct int_meta_t *int_meta_hdr, const uint8_t meta_cnt) {
+    // Convert source timestamp
+    tmpHdr.origTs = ntoh64(((int_meta_hdr->ingress_tstamp)));
+
+    // Storing information for delay counting
+    uint64_t tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
+    
+    for(uint8_t i = 0; i < meta_cnt; ++i) {
+        struct telemetric_meta node;
+        node.hop_index = i;
+        node.hop_delay = ntoh64(int_meta_hdr->egress_tstamp) - ntoh64(int_meta_hdr->ingress_tstamp);
+        node.link_delay = 0;
+
+        // Delay can not be counted for first node (There is no previous timestamp)
+        if(i != 0)
+        {
+            node.link_delay = tmp_eg_timestamp -  ntoh64(int_meta_hdr->ingress_tstamp);
+            tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
+        }
+
+        node.hop_jitter = ntoh64(int_meta_hdr->ingress_tstamp) - prev_timestamps[i];
+        prev_timestamps[i] = ntoh64(int_meta_hdr->ingress_tstamp);
+
+        tmpHdr.node_meta.push_back(node); 
+        ++int_meta_hdr;
+    }
+}
+
+/**
+ * Report data to influx
+ * \param influxdb Database descriptor
+ * \param opt Program parameters
+ * \param tmpHdr Data to send
+ */
+void report_to_influx(IntExporter &exporter, const options_t& opt, telemetric_hdr_t &tmpHdr) {
     if(opt.hostValid && (pkt_cnt % opt.smpl_rate == 0)) {
         uint32_t ret = exporter.sendData(tmpHdr);
         if(ret != EXIT_SUCCESS) {
@@ -246,15 +252,45 @@ uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const opt
             //return RET_ERR;
             pkt_drop++;
             if(pkt_drop % 1000 == 0 && pkt_drop != 0) {
-                std::cout << "dopped: " << pkt_drop << std::endl;
+                std::cout << "dropped: " << pkt_drop << std::endl;
             }
         }
-    }  
-      
+    }
+         
     // Print to console
     if(opt.verbose) {
         print_telemetric(&tmpHdr);
+    } 
+}
+
+/**
+ * Process one received packet based on the program
+ * \param pkt Input packet to prs
+ * \param influxdb Database descriptor
+ * \param opt Program parameters
+ * \return RET_OK if everything was fine
+ */
+uint32_t process_packet(struct ndp_packet& pkt, IntExporter &exporter, const options_t& opt) {
+    // Prepare telemetric data into the apropriate structure
+    telemetric_hdr_t tmpHdr;
+    struct int_influx_t *int_hdr = (struct int_influx_t*)pkt.data;
+    struct int_influx_t *tmp = int_hdr;
+    struct int_meta_t *int_meta_hdr = (struct int_meta_t *)(++tmp);
+    
+    uint64_t map_key = *((uint64_t*)(pkt.data));
+    get_int_header_data(tmpHdr, int_hdr, map_key);
+
+    uint8_t meta_cnt = int_hdr->meta_len/(int_hdr->hop_meta_len);
+    get_int_node_data(tmpHdr, int_meta_hdr, meta_cnt);
+ 
+    // Cut of timestamps to 48 bits
+    if(opt.tstmp == 1) {
+        uint64_t mask = 0x0000FFFFFFFFFFFF;
+        tmpHdr.origTs = tmpHdr.origTs & mask;
+        tmpHdr.dstTs = tmpHdr.dstTs & mask;
     }
+
+    report_to_influx(exporter, opt, tmpHdr);
 
     return RET_OK;
 }
