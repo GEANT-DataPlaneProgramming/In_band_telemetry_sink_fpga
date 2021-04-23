@@ -15,6 +15,57 @@
 #define RECORD_SIZE 210
 
 /**
+ * Assemble reports and add them to data buffer
+ * \param telemetric Data for record assembling
+ * \param data Place for assembled records
+ * \return Number of records added
+ */
+int add_report(telemetric_hdr_t &telemetric, std::string &data)
+{
+    int it = 0;
+    char report[400];
+    char tmp[400];
+    memset(report, 0, 400);
+    memset(tmp, 0, 400);
+
+    // Same part for every record
+    sprintf(tmp,
+        "int_telemetry,srcip=%s,dstip=%s,srcp=%u,dstp=%u,protocol=%u",
+        telemetric.srcIp, telemetric.dstIp, telemetric.srcPort, telemetric.dstPort, telemetric.protocol);
+   
+        
+    sprintf(report,
+        "%s,origts=%lu,dstts=%lu,seq=%lu,delay=%lu,sink_jitter=%lu,reordering=%ld %lu\n",
+        tmp, telemetric.origTs, telemetric.dstTs,
+        telemetric.seqNum, telemetric.delay, telemetric.sink_jitter, telemetric.reordering, telemetric.dstTs);
+
+    data.append(report);
+    memset(report, 0, 400);
+    it++;
+
+    bool first = true;
+    for(auto &item: telemetric.node_meta) {
+        if(first) {
+            sprintf(report,
+                "%s,hop_index=%u,hop_delay=%lu %lu\n",
+                tmp, item.hop_index, item.hop_delay, telemetric.dstTs);
+            first = false;
+        }
+        else {
+            sprintf(report,
+                "%s,hop_index=%u,hop_delay=%lu,link_delay=%lu %lu\n",
+                tmp, item.hop_index, item.hop_delay, item.link_delay, telemetric.dstTs);
+        }
+
+        data.append(report);
+        memset(report, 0, 400);
+        it++;
+    }
+
+    return it;
+}
+
+/**
  * Read records from ring buffer and send them to the database by HTTP protocol.
  * \param ring Selected ring buffer
  * \param opt Program options
@@ -29,7 +80,7 @@ static void http_sender(ringbuffer<telemetric_hdr_t, RING_BUFFER_SIZE> *ring, co
 
     std::string data;
     data.reserve(RECORD_SIZE * opt->batch);
-    char report[400];
+    
     uint32_t it = 0;     
 
     while(true) {
@@ -55,39 +106,11 @@ static void http_sender(ringbuffer<telemetric_hdr_t, RING_BUFFER_SIZE> *ring, co
         
         // Prepare http datagram and send it
         if(opt->hostValid) {
-            char tmp[400];
-            memset(tmp, 0, 400);
-            sprintf(tmp,
-                "int_telemetry,srcip=%s,dstip=%s,srcp=%u,dstp=%u,protocol=%u",
-                telemetric.srcIp, telemetric.dstIp, telemetric.srcPort, telemetric.dstPort, telemetric.protocol);
-   
-        
-          sprintf(report,
-                "%s,origts=%lu,dstts=%lu,seq=%lu,delay=%lu,sink_jitter=%lu,reordering=%ld %lu\n",
-                tmp, telemetric.origTs, telemetric.dstTs,
-                telemetric.seqNum, telemetric.delay, telemetric.sink_jitter, telemetric.reordering, telemetric.dstTs);
-            data.append(report);
-            it++;
-
-            int cnt = 0;
-            for(auto & item: telemetric.node_meta) {
-                if(cnt == 0) {
-                    sprintf(report,
-                        "%s,hop_index=%u,hop_delay=%lu %lu\n",
-                        tmp, item.hop_index, item.hop_delay, telemetric.dstTs);
-                 }
-                 else {
-                    sprintf(report,
-                        "%s,hop_index=%u,hop_delay=%lu,link_delay=%lu %lu\n",
-                        tmp, item.hop_index, item.hop_delay, item.link_delay, telemetric.dstTs);
-                 }
-                 data.append(report);
-                 it++;
-                 cnt++;
-           }
+            it += add_report(telemetric, data);
  
-            // Chekc Batch threshold
+            // Check Batch threshold
             if(it >= opt->batch) {
+                std::cout << data << std::endl;
                 try {
                     http_sock.send(data);
                 } catch (std::runtime_error& e) {
@@ -114,7 +137,6 @@ static void udp_sender(ringbuffer<telemetric_hdr_t, RING_BUFFER_SIZE> *ring, con
 
     std::string data;
     data.reserve(65527);
-    char report[400];
     uint32_t it = 0;     
 
     while(true) {
@@ -126,13 +148,7 @@ static void udp_sender(ringbuffer<telemetric_hdr_t, RING_BUFFER_SIZE> *ring, con
         
         // prepare udp datagram and send it
         if(opt->hostValid) {
-            sprintf(report,
-                "int_telemetry,srcip=%s,dstip=%s,srcp=%u,dstp=%u origts=%lu,dstts=%lu,seq=%lu,delay=%lu,sink_jitter=%lu,reordering=%lu %lu\n",
-                telemetric.srcIp, telemetric.dstIp, telemetric.srcPort, telemetric.dstPort, telemetric.origTs, telemetric.dstTs,
-                telemetric.seqNum, telemetric.delay, telemetric.sink_jitter, telemetric.reordering, telemetric.dstTs);
-            
-            data.append(report);
-            it++;
+            it += add_report(telemetric, data);
                
             if(it == opt->batch) { 
                 try {
