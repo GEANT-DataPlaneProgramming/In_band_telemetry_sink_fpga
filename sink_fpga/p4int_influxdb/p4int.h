@@ -47,6 +47,14 @@ typedef struct {
     std::vector<std::array<uint8_t, 6>> ip_flt; // Filter this flows (srouce ip and destination port)
 } options_t;
 
+struct telemetric_meta {
+    int64_t link_delay;
+    uint64_t hop_delay;
+    uint64_t hop_jitter;
+    uint8_t  hop_index;
+    uint64_t hop_timestamp;
+};
+
 // Structure with telemetric information to export 
 typedef struct {
    char        srcIp[IP_BUFF_SIZE]; // String - source IPv4 address
@@ -55,10 +63,12 @@ typedef struct {
    uint16_t    dstPort;             // Value - destination port
    uint64_t    origTs;              // Value - orig. timestamp (UNIX NS format)
    uint64_t    dstTs;               // Value - dest. timestamp (UNIX NS format)
+   uint8_t     protocol;
    uint64_t    seqNum;              // Sequence number of the received frame
    uint64_t    delay;               // Difference between the dest. and orig. timestamp
    uint64_t    sink_jitter;         // Difference between the dest timestamp of current packet and the previous
-   int64_t     reordering;              
+   int64_t     reordering;
+   std::vector<telemetric_meta> node_meta;              
 } telemetric_hdr_t;
 
 // Flow metadata structure 
@@ -66,28 +76,6 @@ struct meta_data {
     uint64_t seq = 0;        // Current sequence number
     uint64_t prev_dstTs = 0; // Previous destination timestamp
 };
-
-struct int_influx_t{
-    uint32_t  srcAddr;
-    uint32_t  dstAddr;
-    uint16_t  ingress_port_id;
-    uint16_t  egress_port_id;
-    uint8_t   meta_len;
-    uint8_t   rsvd1[3];
-    uint32_t  ndk_tstamp1;
-    uint32_t  ndk_tstamp2;
-    uint64_t  delay;
-    uint32_t  seq;
-}__attribute__((packed));  
-
-struct int_meta_t{
-    uint32_t switch_id;
-    uint16_t ingress_port_id;
-    uint16_t egress_port_id;
-    uint64_t ingress_tstamp;
-    uint64_t egress_tstamp;
-}__attribute__((packed));
-
 
 /**
  * Sleep in microseconds
