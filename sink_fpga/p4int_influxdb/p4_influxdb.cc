@@ -35,7 +35,7 @@ int add_report(telemetric_hdr_t &telemetric, std::string &data)
    
         
     sprintf(report,
-        "%s,origts=%lu,dstts=%lu,seq=%lu,delay=%lu,sink_jitter=%lu,reordering=%ld %lu\n",
+        "%s origts=%lu,dstts=%lu,seq=%lu,delay=%lu,sink_jitter=%lu,reordering=%ld %lu\n",
         tmp, telemetric.origTs, telemetric.dstTs,
         telemetric.seqNum, telemetric.delay, telemetric.sink_jitter, telemetric.reordering, telemetric.dstTs);
 
@@ -47,14 +47,20 @@ int add_report(telemetric_hdr_t &telemetric, std::string &data)
     for(auto &item: telemetric.node_meta) {
         if(first) {
             sprintf(report,
-                "%s,hop_index=%u,hop_delay=%lu %lu\n",
-                tmp, item.hop_index, item.hop_delay, telemetric.dstTs);
+                "%s,hop_index=%u hop_delay=%lu,hop_jitter=%lu %lu\n",
+                tmp, item.hop_index, item.hop_delay, item.hop_jitter, item.hop_timestamp);
             first = false;
         }
         else {
-            sprintf(report,
-                "%s,hop_index=%u,hop_delay=%lu,link_delay=%lu %lu\n",
-                tmp, item.hop_index, item.hop_delay, item.link_delay, telemetric.dstTs);
+            if(item.hop_delay != 0) {
+                sprintf(report,
+                    "%s,hop_index=%u hop_delay=%lu,link_delay=%li,hop_jitter=%li %lu\n",
+                    tmp, item.hop_index, item.hop_delay, item.link_delay, item.hop_jitter, item.hop_timestamp);
+            } else {
+                sprintf(report,
+                    "%s,hop_index=%u link_delay=%li,hop_jitter=%li %lu\n",
+                    tmp, item.hop_index, item.link_delay, item.hop_jitter, item.hop_timestamp);
+            }
         }
 
         data.append(report);

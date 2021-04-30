@@ -48,10 +48,11 @@ typedef struct {
 } options_t;
 
 struct telemetric_meta {
-    uint64_t link_delay;
+    int64_t link_delay;
     uint64_t hop_delay;
     uint64_t hop_jitter;
     uint8_t  hop_index;
+    uint64_t hop_timestamp;
 };
 
 // Structure with telemetric information to export 

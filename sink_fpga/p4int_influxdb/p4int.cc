@@ -215,13 +215,14 @@ void get_int_node_data(telemetric_hdr_t &tmpHdr, struct int_meta_t *int_meta_hdr
     tmpHdr.origTs = ntoh64(((int_meta_hdr->ingress_tstamp)));
 
     // Storing information for delay counting
-    uint64_t tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
+    int64_t tmp_eg_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
     
+    struct telemetric_meta node;
     for(uint8_t i = 0; i < meta_cnt; ++i) {
-        struct telemetric_meta node;
         node.hop_index = i;
         node.hop_delay = ntoh64(int_meta_hdr->egress_tstamp) - ntoh64(int_meta_hdr->ingress_tstamp);
         node.link_delay = 0;
+        node.hop_timestamp = ntoh64(int_meta_hdr->egress_tstamp);
 
         // Delay can not be counted for first node (There is no previous timestamp)
         if(i != 0)
@@ -236,6 +237,15 @@ void get_int_node_data(telemetric_hdr_t &tmpHdr, struct int_meta_t *int_meta_hdr
         tmpHdr.node_meta.push_back(node); 
         ++int_meta_hdr;
     }
+
+    node.hop_index = meta_cnt;
+    node.hop_delay = 0;
+    node.link_delay = tmp_eg_timestamp - tmpHdr.dstTs;
+    node.hop_timestamp = tmpHdr.dstTs;
+    node.hop_jitter = tmpHdr.dstTs - prev_timestamps[meta_cnt];
+    prev_timestamps[meta_cnt] = tmpHdr.dstTs;
+    
+    tmpHdr.node_meta.push_back(node); 
 }
 
 /**
